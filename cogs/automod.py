@@ -129,7 +129,7 @@ class automod(commands.Cog):
             latest_user = quarantine[0]
 
             # list information about the server's quarantine
-            embed.set_author(name = f"{ctx.message.guild.name}", icon_url = ctx.message.guild.icon)
+            embed.set_author(name = ctx.message.guild.name)
             embed.add_field(name = "Users in quarantine:", value = f"{len(quarantine)}")
             embed.add_field(name = "Latest user:", value = f"{latest_user}")
             embed.add_field(name = "Commands", value = "`t!q clear` - removes the quarantine role\n`t!q kick|ban` - kicks/bans users from the server\n`t!q add` - adds users to quarantines", inline = False)

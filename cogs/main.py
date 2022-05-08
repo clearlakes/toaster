@@ -140,7 +140,7 @@ class main(commands.Cog):
         if not view.value:
             return  # if for some reason they don't click "ok"
 
-        embed.set_footer(text = ctx.message.guild.name, icon_url = ctx.message.guild.icon)
+        embed.set_footer(text = ctx.message.guild.name)
 
         # [question, text to display next to result]
         questions = [
@@ -187,7 +187,7 @@ class main(commands.Cog):
             # append result to list
             results.append(view.value)
 
-        embed.set_author(name = "Finalizing Setup...", icon_url = ctx.message.guild.icon)
+        embed.set_author(name = "Finalizing Setup...")
         embed.remove_footer()
         embed.description = ""
 

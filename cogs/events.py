@@ -176,13 +176,16 @@ class events(commands.Cog):
             if entry.user == entry.guild.me:
                 return
 
+            if entry.user == entry.guild.owner:
+                return
+
             # if what was deleted was not prioritized, check if other things were deleted as well
             if deleted.id not in guild.priority:
                 now = datetime.now()
                 five_minutes_ago = int((now - timedelta(minutes=5)).timestamp())
 
                 # list every deletion entry that happened in the last 5 minutes
-                amount_deleted = [log_entry for log_entry in reversed(cache) if log_entry[0] <= five_minutes_ago and log_entry[1] == entry.user.id]
+                amount_deleted = [log_entry for log_entry in reversed(cache) if log_entry[0] >= five_minutes_ago and log_entry[1] == entry.user.id]
 
                 # if less than three things were deleted, add it as an entry
                 if len(amount_deleted) < 3:
