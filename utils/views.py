@@ -165,7 +165,7 @@ class DropdownView(discord.ui.View):
         if kind == "channel":
             # loop over every visible channel
             for index, channel in enumerate(reversed(ctx.message.guild.text_channels)):
-                if index == 25:
+                if index == 24:
                     break
 
                 choice = discord.SelectOption(
