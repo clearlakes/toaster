@@ -269,7 +269,7 @@ class automod(commands.Cog):
         else:
             for role in roles:
                 # add or remove channels depending on if they're in the priority list
-                if role.id not in guild.allowed:
+                if not guild.allowed or role.id not in guild.allowed:
                     db.push_to_list('allowed', role.id)
                     added.append(role.id)
                 else:
