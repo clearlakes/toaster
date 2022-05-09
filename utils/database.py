@@ -18,23 +18,26 @@ class Document:
         if document:
             # list of variables used throughout the bot
             # this can probably be done in automatically but this allows for intellisense
-            self.queue: list = document['queue']
-            self.method: str = document['method']
-            self.log_id: int = document['log_id']
-            self.wait_id: int = document['wait_id']
-            self.actions: int = document['actions']
-            self.min_age: int = document['min_age']
-            self.history: int = document['history']
-            self.priority: list = document['priority']
-            self.q_role_id: int = document['q_role_id']
-            self.quarantine: dict = document['quarantine']
-            self.role_cache: list = document['role_cache']
-            self.emoji_cache: list = document['emoji_cache']
-            self.sticker_cache:list = document['sticker_cache']
-            self.channel_cache:list = document['channel_cache']
-            self.watching_roles: bool = document['watch_roles']
-            self.watching_emojis: bool = document['watch_emojis']
-            self.watching_channels: bool = document['watch_channels']
+            get = lambda key: document.get(key)
+            
+            self.queue: list = get('queue')
+            self.method: str = get('method')
+            self.log_id: int = get('log_id')
+            self.wait_id: int = get('wait_id')
+            self.actions: int = get('actions')
+            self.min_age: int = get('min_age')
+            self.history: int = get('history')
+            self.allowed: list = get('allowed')
+            self.priority: list = get('priority')
+            self.q_role_id: int = get('q_role_id')
+            self.quarantine: dict = get('quarantine')
+            self.role_cache: list = get('role_cache')
+            self.emoji_cache: list = get('emoji_cache')
+            self.sticker_cache: list = get('sticker_cache')
+            self.channel_cache: list = get('channel_cache')
+            self.watching_roles: bool = get('watch_roles')
+            self.watching_emojis: bool = get('watch_emojis')
+            self.watching_channels: bool = get('watch_channels')
 
 class Guild:
     def __init__(self, guild: discord.Guild):
@@ -104,5 +107,6 @@ class Guild:
             'emoji_cache': [],
             'sticker_cache': [],
             'channel_cache': [],
+            'allowed': [],
             'priority': []
         })

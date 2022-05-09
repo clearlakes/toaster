@@ -247,6 +247,43 @@ class automod(commands.Cog):
 
         await ctx.send(embed = embed)
 
+    @commands.command(aliases = ["a"])
+    @commands.has_permissions(administrator = True)
+    async def allow(self, ctx: commands.Context, roles: commands.Greedy[discord.Role]):
+        db = database.Guild(ctx.guild)
+        guild = db.get()
+
+        added = []
+        removed = []
+
+        embed = discord.Embed(color = self.client.gray)
+
+        if not roles:
+            # list allowed roles
+            if not guild.allowed:
+                embed.description = "No roles have been allowed yet."
+                embed.set_footer(text = "Add/remove roles by listing them after t!allow")
+            else:
+                embed.description = "**Allowed roles:**\n" + ', '.join([f'<@&{r}>' for r in guild.allowed])
+                embed.set_footer(text = f"{len(guild.allowed)} total")
+        else:
+            for role in roles:
+                # add or remove channels depending on if they're in the priority list
+                if role.id not in guild.allowed:
+                    db.push_to_list('allowed', role.id)
+                    added.append(role.id)
+                else:
+                    db.pull_from_list('allowed', role.id)
+                    removed.append(role.id)
+
+            if added:
+                embed.add_field(name = 'Added:', value = ', '.join([f'<@&{r}>' for r in added]))
+            
+            if removed:
+                embed.add_field(name = 'Removed:', value = ', '.join([f'<@&{r}>' for r in removed]))
+
+        await ctx.send(embed = embed)
+
     @commands.command(aliases = ["emojis", "e"])
     @commands.has_permissions(manage_emojis = True)
     @commands.bot_has_permissions(manage_emojis = True)

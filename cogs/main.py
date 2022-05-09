@@ -64,9 +64,10 @@ class main(commands.Cog):
         `*` - optional
         `t!info` - lists information about the bot
         `t!setup` - sets up the quarantine functionality of the bot
+        `t!allow *[roles]` - allows specified roles to view quarantine channels
         `t!toggle *[method]` - changes the mode of the bot
         `t!quarantine *[action]` - view and manage users in quarantine
-        `t!priority *[channels]` - distinguishes important channels 
+        `t!priority *[channels]` - distinguishes important channels
         `t!sticker` | `t!emoji` - view recently deleted emojis/stickers
         """
 
@@ -75,6 +76,7 @@ class main(commands.Cog):
         **Required permissions (user):**
         `t!info` - none
         `t!setup` - administrator
+        `t!allow` - administrator
         `t!toggle` - manage roles, kick/ban
         `t!quarantine` - manage roles, kick/ban
         `t!priority` - administrator

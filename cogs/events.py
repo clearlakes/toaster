@@ -51,10 +51,14 @@ class events(commands.Cog):
                     attach_files = False,
                     use_external_emojis = False
                 ),
-                member.guild.me: discord.PermissionOverwrite(
-                    view_channel = True
-                )
+                member.guild.me: discord.PermissionOverwrite(view_channel = True)
             }
+
+            # allow roles in guild.allowed to view quarantine
+            if db_doc.allowed:
+                for role_id in db_doc.allowed:
+                    role = await member.guild.get_role(role_id)
+                    overwrites[role] = discord.PermissionOverwrite(view_channel = True)
 
             # hide the waiting room from the member
             waitroom = member.guild.get_channel(db_doc.wait_id)
