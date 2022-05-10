@@ -315,14 +315,14 @@ class events(commands.Cog):
         account_age = int((member.created_at.replace(tzinfo = None) - datetime.now()).total_seconds())
 
         # do nothing if the account is not new
-        if account_age > guild.min_age:
+        if account_age < guild.min_age and guild.method != 'lockdown':
             return
 
         log = member.guild.get_channel(guild.log_id)
 
         # manage the account according to the method
 
-        if guild.method == 'quarantine':
+        if guild.method == 'quarantine' or guild.method == 'lockdown':
             extra = await self.quarantine(db, guild, member, log)
             action = "Quarantined"
 

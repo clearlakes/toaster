@@ -192,6 +192,10 @@ class DropdownView(discord.ui.View):
                 discord.SelectOption(
                     label = "Ban",
                     description = "permanently ban new accounts from the server"
+                ),
+                discord.SelectOption(
+                    label = "Lockdown",
+                    description = "quarantines every account that joins"
                 )
             ]
 

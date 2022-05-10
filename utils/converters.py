@@ -8,7 +8,7 @@ def compare(given_str: str, given_list: list[str]):
 
 class ValidMethod(commands.Converter):
     async def convert(self, _, given_str: str):
-        return compare(given_str, ["ignore", "quarantine", "kick", "ban"])
+        return compare(given_str, ["ignore", "quarantine", "kick", "ban", "lockdown"])
 
 class ValidAction(commands.Converter):
     async def convert(self, _, given_str: str):
