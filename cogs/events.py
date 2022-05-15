@@ -312,10 +312,10 @@ class events(commands.Cog):
             return
 
         # get the account's age in seconds
-        account_age = int((member.created_at.replace(tzinfo = None) - datetime.now()).total_seconds())
+        account_age = int((datetime.now() - member.created_at.replace(tzinfo = None)).total_seconds())
 
-        # do nothing if the account is not new
-        if account_age < guild.min_age and guild.method != 'lockdown':
+        # do nothing if the account isn't new (and the server isn't on lockdown)
+        if account_age > guild.min_age and guild.method != 'lockdown':
             return
 
         log = member.guild.get_channel(guild.log_id)
