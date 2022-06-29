@@ -29,6 +29,7 @@ class Document:
             self.history: int = get('history')
             self.allowed: list = get('allowed')
             self.priority: list = get('priority')
+            self.lockdown: bool = get('lockdown')
             self.q_role_id: int = get('q_role_id')
             self.quarantine: dict = get('quarantine')
             self.role_cache: list = get('role_cache')
@@ -65,21 +66,21 @@ class Guild:
         _db.update_one(self.guild, {'$unset': {f'quarantine.{user_id}': 1}})
         _db.update_one(self.guild, {'$pull': {'queue': user_id}})
 
-    def push_to_list(self, field: str, obj, pre: bool = False) -> None:
-        """Pushes an object to the given field."""
-        _db.update_one(self.guild, {'$push': {field: {'$each': [obj]}}})
+    def push_to_list(self, field: str, value) -> None:
+        """Pushes a value to the given field."""
+        _db.update_one(self.guild, {'$push': {field: {'$each': [value]}}})
 
-    def pull_from_list(self, field: str, obj) -> None:
-        """Pulls (removes) an object from a given field."""
-        _db.update_one(self.guild, {'$pull': {field: obj}})
+    def pull_from_list(self, field: str, value) -> None:
+        """Pulls (removes) a value from a given field."""
+        _db.update_one(self.guild, {'$pull': {field: value}})
     
     def clear_list(self, field: str) -> None:
         """Clears the given field's list."""
         _db.update_one(self.guild, {'$set': {field: []}})
 
-    def set_method(self, method: str) -> None:
-        """Sets the method of dealing with new accounts for the guild."""
-        _db.update_one(self.guild, {'$set': {'method': method.lower()}}, upsert = True)
+    def set_field(self, field: str, value) -> None:
+        """Sets the specified field to a given value."""
+        _db.update_one(self.guild, {'$set': {field: value}})
 
     def get(self) -> Union[Document, None]:
         """Returns the guild's database entry as a class."""
@@ -101,6 +102,7 @@ class Guild:
             'watch_channels': watch_channels,
             'watch_emojis': watch_emojis,
             'watch_roles': watch_roles,
+            'lockdown': False,
             'quarantine': {},
             'queue': [],
             'role_cache': [],

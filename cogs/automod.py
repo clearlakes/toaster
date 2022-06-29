@@ -94,7 +94,7 @@ class automod(commands.Cog):
             await view.wait()
             method = view.value
 
-        database.Guild(ctx.guild).set_method(method)
+        database.Guild(ctx.guild).set_field('method', method)
         
         embed.description = f"Set the method to **{method.capitalize()}**."
         embed.color = discord.Color.brand_green()
@@ -108,7 +108,7 @@ class automod(commands.Cog):
     @commands.command(aliases = ["q"])
     @commands.has_permissions(manage_roles = True, kick_members = True, ban_members = True)
     @commands.bot_has_permissions(manage_roles = True, kick_members = True, ban_members = True)
-    async def quarantine(self, ctx: commands.Context, action: Optional[ValidAction], members: commands.Greedy[discord.Member]):
+    async def quarantine(self, ctx: commands.Context, members: commands.Greedy[discord.Member], action: Optional[ValidAction]):
         db = database.Guild(ctx.guild)
         guild = db.get()
 
@@ -124,11 +124,11 @@ class automod(commands.Cog):
             embed.description = "Nobody's in quarantine right now."
             return await ctx.send(embed = embed)
 
-        if not action:
+        # if nothing was given, display information about the server's quarantine
+        if not members and not action:
             quarantine = q_role.members
             latest_user = quarantine[0]
 
-            # list information about the server's quarantine
             embed.set_author(name = ctx.message.guild.name)
             embed.add_field(name = "Users in quarantine:", value = f"{len(quarantine)}")
             embed.add_field(name = "Latest user:", value = f"{latest_user}")
@@ -162,11 +162,11 @@ class automod(commands.Cog):
 
             action_taken = "Banned"
 
-        elif action == "add":
+        elif not action or action == "add":
             log = await self.client.fetch_channel(guild.log_id)
             
             for member in quarantine:
-                if member.id in guild.quarantine or member.id in guild.queue:
+                if str(member.id) in guild.quarantine or member.id in guild.queue:
                     if len(quarantine) == 1:
                         # send an error if the one member that was listed is being quarantined already
                         return await ctx.send("**Error:** that user is already quarantined!")
@@ -174,8 +174,9 @@ class automod(commands.Cog):
                     # continue in case there are others listed that have not been quarantined yet
                     continue
                 
+                position = await events(self.client).quarantine(member)
+
                 # log the quarantine
-                position = await events(self.client).quarantine(db, guild, member, log)
                 log_embed = events(self.client).create_log_embed(
                     title = "Quarantined Member", 
                     member = member,
@@ -312,6 +313,23 @@ class automod(commands.Cog):
         msg = await ctx.send(embed = loading)
         embed, view = await e_or_s_list(ctx, msg, 'sticker')
         await msg.edit(embed = embed, view = view)
+
+    @commands.command(aliases = ["lock", "l"])
+    @commands.has_permissions(manage_roles = True, kick_members = True, ban_members = True)
+    async def lockdown(self, ctx: commands.Context):
+        db = database.Guild(ctx.guild)
+        guild = db.get()
+
+        embed = discord.Embed(color = self.client.gray)
+
+        # toggle lockdown
+        new_status = not guild.lockdown
+        db.set_field('lockdown', new_status)
+
+        status = "enabled" if new_status else "disabled"
+        embed.description = f"Lockdown has been {status}!"
+
+        await ctx.send(embed = embed)
 
 def setup(bot):
     bot.add_cog(automod(bot))

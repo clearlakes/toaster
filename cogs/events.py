@@ -15,7 +15,7 @@ class events(commands.Cog):
         if len(before) > len(after):
             return next(iter(set(before) - set(after)))
 
-    def create_log_embed(self, title: str, member: discord.Member, reason: str = None, extra = None):
+    def create_log_embed(self, title: str, member: discord.Member, reason: str = None, extra: str = None):
         """Generates embeds for logging quarantines."""
         embed = discord.Embed(
             title = title,
@@ -35,14 +35,17 @@ class events(commands.Cog):
 
         return embed
     
-    async def quarantine(self, db_guild: database.Guild, db_doc: database.Document, member: discord.Member, log: discord.TextChannel):
-        """Either quarantines or enqueues users."""
-        q_role = member.guild.get_role(db_doc.q_role_id)
+    async def quarantine(self, member: discord.Member):
+        """Quarantines the specified user (or adds them to the queue)."""
+        db = database.Guild(member.guild)
+        guild = db.get()
+
+        q_role = member.guild.get_role(guild.q_role_id)
         await member.add_roles(q_role)
-        db_guild.increment()
+        db.increment()
 
         # quarantine the user if there are less than 5 active ones (else, add them to the queue)
-        if len(db_doc.quarantine) < 5:
+        if len(guild.quarantine) < 0:
             # allow only the member and the bot to view the channel
             overwrites = {
                 member.guild.default_role: discord.PermissionOverwrite(read_messages = False),
@@ -55,40 +58,41 @@ class events(commands.Cog):
             }
 
             # allow roles in guild.allowed to view quarantine
-            if db_doc.allowed:
-                for role_id in db_doc.allowed:
+            if guild.allowed:
+                for role_id in guild.allowed:
                     role = member.guild.get_role(role_id)
                     overwrites[role] = discord.PermissionOverwrite(view_channel = True)
 
             # hide the waiting room from the member
-            waitroom = member.guild.get_channel(db_doc.wait_id)
+            waitroom = member.guild.get_channel(guild.wait_id)
             await waitroom.set_permissions(member, view_channel = False)
+
+            # get the log channel (to find its category)
+            log = member.guild.get_channel(guild.log_id)
 
             # create the quarantine channel
             channel = await member.guild.create_text_channel(f"quarantine-{member.name.replace(' ', '')[0:5]}", overwrites = overwrites, category = log.category)
-            db_guild.add_quarantine(member.id, channel.id)
+            db.add_quarantine(member.id, channel.id)
 
             return f"<#{channel.id}>"
         else:
-            db_guild.push_to_list('queue', member.id)
-            return f"Queued - #{len(db_doc.queue) + 1}"
+            db.push_to_list('queue', member.id)
+            return f"Queued - #{len(guild.queue) + 1}"
 
     async def remove_quarantine(self, member: discord.Member, reason: str):
         """Removes a user from quarantine/the queue."""
         db = database.Guild(member.guild)
         guild = db.get()
 
-        member_id = str(member.id)
-
         if guild is None:
             return
 
-        if member_id in guild.quarantine or member.id in guild.queue:
+        if str(member.id) in guild.quarantine or member.id in guild.queue:
             # bakcup and delete the quarantine channel if the user was being quarantined (else, remove them from the queue)
-            if member_id in guild.quarantine:
+            if str(member.id) in guild.quarantine:
                 what = f"Ended quarantine of {member} ({reason})"
                 
-                channel: discord.TextChannel = await self.client.fetch_channel(guild.quarantine[member_id])
+                channel: discord.TextChannel = await self.client.fetch_channel(guild.quarantine[str(member.id)])
                 
                 # backup might take a while
                 saving = discord.Embed(
@@ -134,12 +138,12 @@ class events(commands.Cog):
             await log.send(embed = embed)
 
             # if the user was in a quarantine channel, pull in the next person in the queue
-            if member_id in guild.quarantine and len(guild.queue) > 0 and guild.method == 'quarantine':
+            if str(member.id) in guild.quarantine and len(guild.queue) > 0 and guild.method == 'quarantine':
                 guild = db.get()
                 next_member = member.guild.get_member(guild.queue[0])
 
                 db.pull_from_list('queue', next_member.id)
-                await self.quarantine(db, guild, next_member, log)
+                await self.quarantine(next_member)
 
                 embed.set_author(name = f"Moved {next_member} into quarantine #{len(guild.quarantine) + 1}", icon_url = next_member.display_avatar)
                 embed.color = discord.Color.dark_purple()
@@ -227,7 +231,7 @@ class events(commands.Cog):
 
             # log the quarantine
             log = deleted.guild.get_channel(guild.log_id)
-            extra = await self.quarantine(db, guild, entry.user, log) 
+            extra = await self.quarantine(entry.user) 
 
             embed = self.create_log_embed("Quarantined Member", entry.user, reason.capitalize(), extra = extra)
             
@@ -276,27 +280,59 @@ class events(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
-        # remove a member from quarantine/queue if they leave (or if they are kicked)
-        await self.remove_quarantine(member, "left")
-    
-    @commands.Cog.listener()
-    async def on_member_ban(self, guild: discord.Guild, member: discord.Member):
-        # remove a member from quarantine/queue if they are banned
-        await self.remove_quarantine(member, "banned")
+        # since this event is called multiple times on ban/kick, check what happened first
+        entry = await member.guild.audit_logs(limit = 1).get(target = member)
+        
+        reason = "left"
+
+        if entry:
+            if entry.action is discord.AuditLogAction.ban:
+                reason = "banned"
+            elif entry.action is discord.AuditLogAction.kick:
+                reason = "kicked"
+        
+        await self.remove_quarantine(member, reason)
     
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
-        deleted_role = self.find_missing(before.roles, after.roles)
-
-        if deleted_role:
+        # checks if the quarantine role was given/removed
+        def is_quarantine(role: discord.Role):
             guild = database.Guild(after.guild).get()
 
-            if guild is None:
+            if not guild or not role:
+                return False
+
+            return (role.id == guild.q_role_id)
+
+        deleted_role = self.find_missing(before.roles, after.roles)
+        added_role = self.find_missing(after.roles, before.roles)
+
+        # if quarantine role was removed
+        if is_quarantine(deleted_role):
+            await self.remove_quarantine(after, "cleared")
+
+        # if quarantine role was added
+        elif is_quarantine(added_role):
+            # get the user that added the role
+            entry = await after.guild.audit_logs(action = discord.AuditLogAction.member_role_update, limit = 1).get(target = after)
+
+            # ignore if the role was added by toaster
+            if entry.user == after.guild.me:
                 return
 
-            # check if the user had the quarantine role removed from them
-            if deleted_role.id == guild.q_role_id:
-                await self.remove_quarantine(after, "cleared")
+            position = await self.quarantine(after)
+
+            log_embed = self.create_log_embed(
+                title = "Quarantined Member", 
+                member = after,
+                reason = f"Manually added by {entry.user.mention}",
+                extra = position
+            )
+
+            log_id = database.Guild(after.guild).get().log_id
+            log = after.guild.get_channel(log_id)
+
+            await log.send(embed = log_embed)
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
@@ -315,15 +351,15 @@ class events(commands.Cog):
         account_age = int((datetime.now() - member.created_at.replace(tzinfo = None)).total_seconds())
 
         # do nothing if the account isn't new (and the server isn't on lockdown)
-        if account_age > guild.min_age and guild.method != 'lockdown':
+        if not guild.lockdown and account_age > guild.min_age:
             return
 
         log = member.guild.get_channel(guild.log_id)
 
         # manage the account according to the method
 
-        if guild.method == 'quarantine' or guild.method == 'lockdown':
-            extra = await self.quarantine(db, guild, member, log)
+        if guild.method == 'quarantine':
+            extra = await self.quarantine(member)
             action = "Quarantined"
 
         elif guild.method == 'kick':
@@ -334,8 +370,10 @@ class events(commands.Cog):
             await member.ban()
             action = "Banned"
 
+        reason = "Lockdown" if guild.lockdown else None
+
         # log the action
-        embed = self.create_log_embed(f"{action} Member", member, extra = extra)
+        embed = self.create_log_embed(f"{action} Member", member, reason, extra)
 
         await log.send(embed = embed)
 

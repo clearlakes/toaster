@@ -61,25 +61,28 @@ class main(commands.Cog):
     async def help(self, ctx: commands.Context):
         # page 1
         command_help = """
-        `*` - optional
         `t!info` - lists information about the bot
         `t!setup` - sets up the quarantine functionality of the bot
         `t!allow *[roles]` - allows specified roles to view quarantine channels
         `t!toggle *[method]` - changes the mode of the bot
-        `t!quarantine *[action]` - view and manage users in quarantine
+        `t!lockdown` - applies the current method to anyone joining, regardless of their account age
         `t!priority *[channels]` - distinguishes important channels
-        `t!sticker` | `t!emoji` - view recently deleted emojis/stickers
+        `t!quarantine` - displays information about the server's quarantines
+        `t!quarantine *[members]` - adds users to quarantine
+        `t!quarantine *[members] *[clear/kick/ban]` - manages users in quarantine (all if nobody is specified)
+        `t!sticker` | `t!emoji` - displays recently deleted emojis/stickers
         """
 
         # page 2
         perm_help = """
         **Required permissions (user):**
-        `t!info` - none
-        `t!setup` - administrator
-        `t!allow` - administrator
-        `t!toggle` - manage roles, kick/ban
+        `t!info      ` - none
+        `t!setup     ` - administrator
+        `t!allow     ` - administrator
+        `t!toggle    ` - manage roles, kick/ban
+        `t!lockdown  ` - manage roles, kick/ban
+        `t!priority  ` - administrator
         `t!quarantine` - manage roles, kick/ban
-        `t!priority` - administrator
         `t!sticker` | `t!emoji` - manage emojis/stickers
 
         **Required permissions (bot):**
@@ -90,6 +93,8 @@ class main(commands.Cog):
             discord.Embed(title = "Help - Commands", color = self.client.gray, description = command_help),
             discord.Embed(title = "Help - Permissions", color = self.client.gray, description = perm_help)
         ]
+
+        embeds[0].set_footer(text = '* - optional')
         
         # create a paginator that only shows one button at a time
         paginator = pages.Paginator(
