@@ -45,7 +45,7 @@ class events(commands.Cog):
         db.increment()
 
         # quarantine the user if there are less than 5 active ones (else, add them to the queue)
-        if len(guild.quarantine) < 0:
+        if len(guild.quarantine) < 5:
             # allow only the member and the bot to view the channel
             overwrites = {
                 member.guild.default_role: discord.PermissionOverwrite(read_messages = False),
