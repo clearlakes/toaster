@@ -1,11 +1,10 @@
-from __future__ import annotations
-
 import discord
-import pymongo
-import configparser
-from typing import Union
 
-config = configparser.ConfigParser()
+from configparser import ConfigParser
+from typing import Union
+import pymongo
+
+config = ConfigParser()
 config.read("config.ini")
 
 # connect to database
@@ -36,6 +35,7 @@ class Document:
             self.emoji_cache: list = get('emoji_cache')
             self.sticker_cache: list = get('sticker_cache')
             self.channel_cache: list = get('channel_cache')
+            self.strike_topics: dict = get('strike_topics')
             self.watching_roles: bool = get('watch_roles')
             self.watching_emojis: bool = get('watch_emojis')
             self.watching_channels: bool = get('watch_channels')

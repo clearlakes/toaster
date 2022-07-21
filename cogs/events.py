@@ -1,8 +1,9 @@
 import discord
-from discord import abc
 from discord.ext import commands
-from datetime import datetime, timedelta
+
 from utils import database
+
+from datetime import datetime, timedelta
 from typing import Union
 import io
 
@@ -271,7 +272,7 @@ class events(commands.Cog):
             await self.log_action(deleted_sticker)
     
     @commands.Cog.listener()
-    async def on_guild_channel_delete(self, channel: abc.GuildChannel):
+    async def on_guild_channel_delete(self, channel: discord.abc.GuildChannel):
         await self.log_action(channel)
     
     @commands.Cog.listener()

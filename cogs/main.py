@@ -1,15 +1,18 @@
 import discord
 from discord.ext import commands, pages
+
 from utils.views import DropdownView, ConfirmView
-from datetime import datetime, timedelta
 from utils import database
+
+from datetime import datetime, timedelta
+from typing import Union
 
 class main(commands.Cog):
     def __init__(self, client):
         self.client = client
 
     @commands.Cog.listener()
-    async def on_command_error(self, ctx: commands.Context, error: commands.CommandError):
+    async def on_command_error(self, ctx: Union[commands.Context, discord.ApplicationContext], error: commands.CommandError):
         if isinstance(error, commands.BotMissingPermissions):
             # create a list of missing permissions
             perm_list = "- **" + "**\n- **".join(error.missing_permissions).replace("_", " ").title() + "**\n"
@@ -22,8 +25,11 @@ class main(commands.Cog):
 
             await ctx.send(embed = embed)
         elif isinstance(error, commands.CheckFailure):
-            # this appears every time the cog check in automod fails (server is not set up)
-            pass
+            if isinstance(ctx, discord.ApplicationContext):
+                await ctx.respond("no!!!!!", ephemeral = True)
+            else:
+                # this appears every time the cog check in automod fails (server is not set up)
+                pass
         else:
             raise error
 
@@ -61,15 +67,15 @@ class main(commands.Cog):
     async def help(self, ctx: commands.Context):
         # page 1
         command_help = """
-        `t!info` - lists information about the bot
-        `t!setup` - sets up the quarantine functionality of the bot
-        `t!allow *[roles]` - allows specified roles to view quarantine channels
-        `t!toggle *[method]` - changes the mode of the bot
-        `t!lockdown` - applies the current method to anyone joining, regardless of their account age
+        `t!info                ` - lists information about the bot
+        `t!setup               ` - sets up the quarantine functionality of the bot
+        `t!allow *[roles]      ` - allows specified roles to view quarantines
+        `t!toggle *[method]    ` - changes the mode of the bot
+        `t!lockdown            ` - applies the current method to anyone joining
         `t!priority *[channels]` - distinguishes important channels
-        `t!quarantine` - displays information about the server's quarantines
-        `t!quarantine *[members]` - adds users to quarantine
-        `t!quarantine *[members] *[clear/kick/ban]` - manages users in quarantine (all if nobody is specified)
+        `t!quarantine | t!q    ` - shows information about current quarantines
+        `t!q *[users]          ` - adds users to quarantine
+        `  ^^^ + clear/kick/ban` - manages users in quarantine (+)
         `t!sticker` | `t!emoji` - displays recently deleted emojis/stickers
         """
 
@@ -94,7 +100,7 @@ class main(commands.Cog):
             discord.Embed(title = "Help - Permissions", color = self.client.gray, description = perm_help)
         ]
 
-        embeds[0].set_footer(text = '* - optional')
+        embeds[0].set_footer(text = '*: arguments are optional\n+: applies to everyone in quarantine if nobody is specified')
         
         # create a paginator that only shows one button at a time
         paginator = pages.Paginator(

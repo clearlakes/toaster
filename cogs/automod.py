@@ -1,10 +1,12 @@
 import discord
 from discord.ext import commands, pages
-from utils.converters import ValidAction, ValidMethod
+
 from utils.views import DropdownView, EmojiView, QueueView
+from utils.converters import ValidAction, ValidMethod
 from cogs.events import events
-from typing import Optional
 from utils import database
+
+from typing import Optional
 
 async def queue_paginator(client: commands.Bot, queue: list):
     """Generates the quarantine queue."""
