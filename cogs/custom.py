@@ -3,7 +3,13 @@ from discord.ext import commands
 
 from utils import database
 
+from configparser import ConfigParser
 from datetime import datetime
+
+config = ConfigParser()
+config.read("config.ini")
+
+slash_guilds = [int(x) for x in str(config.get("server", "custom_ids")).split(', ')]
 
 class custom(commands.Cog):
     def __init__(self, client):
@@ -66,7 +72,7 @@ class custom(commands.Cog):
 
         return list(guild.strike_topics.keys())
 
-    @discord.slash_command()
+    @discord.slash_command(guild_ids = slash_guilds, description = "Strike a member for something")
     @commands.has_permissions(kick_members = True, ban_members = True)
     async def strike(self, 
         ctx: discord.ApplicationContext, 
