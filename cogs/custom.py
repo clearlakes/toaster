@@ -9,9 +9,9 @@ class custom(commands.Cog):
     def __init__(self, client):
         self.client = client
     
-    @commands.command(aliases = ["st"])
+    @commands.command(aliases = ["w"])
     @commands.has_permissions(administrator = True)
-    async def striketopic(self, ctx: commands.Context, topic: str = None, *, intervals: str = None):
+    async def watch(self, ctx: commands.Context, topic: str = None, *, intervals: str = None):
         db = database.Guild(ctx.guild)
         guild = db.get()
 
@@ -20,7 +20,7 @@ class custom(commands.Cog):
         # list strike topics if nothing is given
         if not topic:
             if guild.strike_topics:
-                topics = "Strike topics:\n"
+                topics = "Watching for:\n"
 
                 # format intervals and topic name, along with total strikes
                 for st in guild.strike_topics:
@@ -35,9 +35,9 @@ class custom(commands.Cog):
                     topics += f"**{st}** ({intervals}) - {total_strikes} total strikes\n"
                 
                 embed.description = topics
-                embed.set_footer(text = "To remove a topic, use t!st (topic) again")
+                embed.set_footer(text = "Use t!watch (topic) to remove a topic")
             else:
-                embed.description = "there are no topics currently"
+                embed.description = "not watching anything right now"
 
         # delete the topic if it exists 
         elif guild.strike_topics and topic in guild.strike_topics:
