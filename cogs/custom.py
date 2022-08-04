@@ -106,11 +106,9 @@ class custom(commands.Cog):
             await ctx.respond(f"**Error:** could not make the command, invalid action `{interval}`", ephemeral = True)
 
         # multiply or add to punishment length if specified
-        if len(num := re.findall(r'\d+', interval)) == 2:
+        if len(num := re.findall(r'\d+', interval)) == 2 and current_strike > 1:
             operation = interval[(interval.rfind(num[1]) - 1)]
             num = [int(n) for n in num]
-
-            num[1] *= current_strike
             
             if operation == "+":
                 new_length = num[0] + num[1]
