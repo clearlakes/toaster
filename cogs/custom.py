@@ -5,6 +5,7 @@ from utils import database
 
 from configparser import ConfigParser
 from datetime import datetime
+import re
 
 config = ConfigParser()
 config.read("config.ini")
@@ -83,7 +84,7 @@ class custom(commands.Cog):
         guild = db.get()
 
         t = guild.strike_topics[topic]
-        intervals = t['intervals']
+        intervals: list[str] = t['intervals']
         
         # increment the user's strikes (and store the previous value)
         if str(member.id) not in t['users']:
@@ -104,8 +105,23 @@ class custom(commands.Cog):
         if action not in ("m", "b"):
             await ctx.respond(f"**Error:** could not make the command, invalid action `{interval}`", ephemeral = True)
 
+        # multiply or add to punishment length if specified
+        if len(num := re.findall(r'\d+', interval)) == 2:
+            operation = interval[(interval.rfind(num[1]) - 1)]
+            num = [int(n) for n in num]
+
+            num[1] *= current_strike
+            
+            if operation == "+":
+                new_length = num[0] + num[1]
+            elif operation == "*":
+                new_length = num[0] * num[1]
+            
+            if new_length:
+                interval = re.sub('\d+', str(new_length), interval.split(operation)[0])
+
         # create command using information from the selected action
-        elif action == "m":
+        if action == "m":
             cmd = f";mute {member.id} {''.join(interval[1:])} {topic}"
 
         elif action == "b" and len(interval) > 1:
