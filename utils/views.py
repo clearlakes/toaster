@@ -147,7 +147,7 @@ class DropdownView(discord.ui.View):
         options = [
             discord.SelectOption(
                 label = f"[make the {kind} for me]",
-                value = 0
+                value = "0"
             )
         ]
 
@@ -160,7 +160,7 @@ class DropdownView(discord.ui.View):
 
                 choice = discord.SelectOption(
                     label = role.name,
-                    value = role.id
+                    value = str(role.id)
                 )
                 options.append(choice)
 
@@ -172,7 +172,7 @@ class DropdownView(discord.ui.View):
 
                 choice = discord.SelectOption(
                     label = channel.name,
-                    value = channel.id
+                    value = str(channel.id)
                 )
                 options.append(choice)
         
@@ -206,19 +206,19 @@ class DropdownView(discord.ui.View):
             options = [
                 discord.SelectOption(
                     label = "3 days",
-                    value = 259200
+                    value = "259200"
                 ),
                 discord.SelectOption(
                     label = "1 week",
-                    value = 604800
+                    value = "604800"
                 ),
                 discord.SelectOption(
                     label = "2 weeks",
-                    value = 1209600
+                    value = "1209600"
                 ),
                 discord.SelectOption(
                     label = "1 month",
-                    value = 2630000
+                    value = "2630000"
                 )
             ]
 

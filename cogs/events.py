@@ -315,7 +315,7 @@ class events(commands.Cog):
         # if quarantine role was added
         elif is_quarantine(added_role):
             # get the user that added the role
-            entry = await after.guild.audit_logs(action = discord.AuditLogAction.member_role_update, limit = 1).get(target = after)
+            entry = await after.guild.audit_logs(action = discord.AuditLogAction.member_role_update, limit = 1).get(target = before)
 
             # ignore if the role was added by toaster
             if entry.user == after.guild.me:
@@ -357,7 +357,7 @@ class events(commands.Cog):
 
         log = member.guild.get_channel(guild.log_id)
 
-        # manage the account according to the method
+        # manage the account according to the method:
 
         if guild.method == 'quarantine':
             extra = await self.quarantine(member)

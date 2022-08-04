@@ -96,7 +96,7 @@ class automod(commands.Cog):
             await view.wait()
             method = view.value
 
-        database.Guild(ctx.guild).set_field('method', method)
+        database.Guild(ctx.guild).set_field('method', method.lower())
         
         embed.description = f"Set the method to **{method.capitalize()}**."
         embed.color = discord.Color.brand_green()
