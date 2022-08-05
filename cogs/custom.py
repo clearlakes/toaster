@@ -129,6 +129,23 @@ class custom(commands.Cog):
 
         else:
             cmd = f";ban {member.id} {topic}"
+
+        custom_removed = False
+        
+        if topic == "nsfw" and ctx.guild_id == 920012669090660414 and current_strike == 2:
+            no_perm_roles = [
+                ctx.guild.get_role(973744500189044837),
+                ctx.guild.get_role(920166105488711750)
+            ]
+            perm_roles = [
+                ctx.guild.get_role(920159184559931432),
+                ctx.guild.get_role(920166390357438554)
+            ]
+
+            await member.add_roles(*no_perm_roles)
+            await member.remove_roles(*perm_roles)
+
+            custom_removed = True
         
         # remove semicolon and get command name with time interval
         action = cmd[1:].split(' ')[0::2]
@@ -144,6 +161,9 @@ class custom(commands.Cog):
             description = f"{member.mention} `{topic}` strikes: {current_strike - 1} -> **{current_strike}**\ncopy the command above (or long press if you're on mobile)",
             color = self.client.gray
         )
+
+        if custom_removed:
+            embed.description += "\n**(also removed image perms for you)**"
 
         await ctx.respond(cmd, embed = embed, ephemeral = True)
 
