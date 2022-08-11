@@ -158,7 +158,7 @@ class custom(commands.Cog):
             embed.description = f"Strikes for **{topic}** ({intervals}):\n"
 
             users = "\n".join(f"<@{user}>" for (user, _, _) in user_list)
-            strikes = "\n".join(f"`{strike}`" for (_, strike, _) in user_list)
+            strikes = "\n".join(f"{strike}" for (_, strike, _) in user_list)
             times = "\n".join(f"<t:{time}:R>" for (_, _, time) in user_list)
 
             embed.add_field(name = "User", value = users)
