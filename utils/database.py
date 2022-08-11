@@ -57,15 +57,6 @@ class Guild:
         """Increases the total number of 'actions' by the amount specified."""
         _db.update_one(self.guild, {'$inc': {'actions': amount}})
 
-    def add_quarantine(self, user_id: int, channel_id: int) -> None:
-        """Adds a user-channel pair entry to the list of active quarantines."""
-        _db.update_one(self.guild, {'$set': {f'quarantine.{user_id}': channel_id}})
-
-    def del_quarantine(self, user_id: int) -> None:
-        """Removes the user from either the list of quarantines or the queue."""
-        _db.update_one(self.guild, {'$unset': {f'quarantine.{user_id}': 1}})
-        _db.update_one(self.guild, {'$pull': {'queue': user_id}})
-
     def push_to_list(self, field: str, value) -> None:
         """Pushes a value to the given field."""
         _db.update_one(self.guild, {'$push': {field: {'$each': [value]}}})
@@ -79,8 +70,12 @@ class Guild:
         _db.update_one(self.guild, {'$set': {field: []}})
 
     def set_field(self, field: str, value) -> None:
-        """Sets the specified field to a given value."""
+        """Creates/sets the specified field to a given value."""
         _db.update_one(self.guild, {'$set': {field: value}})
+    
+    def del_field(self, field: str) -> None:
+        """Removes the specified field."""
+        _db.update_one(self.guild, {'$unset': {field: 1}})
 
     def get(self) -> Union[Document, None]:
         """Returns the guild's database entry as a class."""

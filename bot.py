@@ -27,7 +27,9 @@ client.gray = 0x2f3136
 async def on_ready():    
     # load cogs
     for cog in ["automod", "custom", "events", "main"]:
-        client.load_extension(f"cogs.{cog}")
+        client.load_extension(f"cogs.{cog}", store = False)
+
+    await client.sync_commands()
 
     print("toaster ready")
 

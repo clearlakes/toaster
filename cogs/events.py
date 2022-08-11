@@ -73,7 +73,7 @@ class events(commands.Cog):
 
             # create the quarantine channel
             channel = await member.guild.create_text_channel(f"quarantine-{member.name.replace(' ', '')[0:5]}", overwrites = overwrites, category = log.category)
-            db.add_quarantine(member.id, channel.id)
+            db.set_field(f'quarantine.{member.id}', channel.id)
 
             return f"<#{channel.id}>"
         else:
@@ -127,7 +127,8 @@ class events(commands.Cog):
                 what = f"Removed {member} from the queue ({reason})"
 
             # remove the quarantine from the guild's database
-            db.del_quarantine(member.id)
+            db.del_field(f'quarantine.{member.id}')
+            db.pull_from_list('queue', member.id)
             
             # add an entry to the log channel
             log = member.guild.get_channel(guild.log_id)
@@ -315,7 +316,7 @@ class events(commands.Cog):
         # if quarantine role was added
         elif is_quarantine(added_role):
             # get the user that added the role
-            entry = await after.guild.audit_logs(action = discord.AuditLogAction.member_role_update, limit = 1).get(target = before)
+            entry = await after.guild.audit_logs(action = discord.AuditLogAction.member_role_update, limit = 1).get(target = after)
 
             # ignore if the role was added by toaster
             if entry.user == after.guild.me:

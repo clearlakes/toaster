@@ -5,14 +5,20 @@ from utils.views import DropdownView, ConfirmView
 from utils import database
 
 from datetime import datetime, timedelta
-from typing import Union
 
 class main(commands.Cog):
     def __init__(self, client):
         self.client = client
 
     @commands.Cog.listener()
-    async def on_command_error(self, ctx: Union[commands.Context, discord.ApplicationContext], error: commands.CommandError):
+    async def on_application_command_error(self, ctx: discord.ApplicationContext, error: commands.CommandError):
+        if isinstance(error, commands.MissingPermissions):
+            return await ctx.respond("https://i.imgur.com/aMQHEWC.jpg", ephemeral = True)
+        
+        raise error
+
+    @commands.Cog.listener()
+    async def on_command_error(self, ctx: commands.Context, error: commands.CommandError):
         if isinstance(error, commands.BotMissingPermissions):
             # create a list of missing permissions
             perm_list = "- **" + "**\n- **".join(error.missing_permissions).replace("_", " ").title() + "**\n"
@@ -23,15 +29,11 @@ class main(commands.Cog):
                 color = discord.Color.brand_red()
             )
 
-            await ctx.send(embed = embed)
-        elif isinstance(error, commands.CheckFailure):
-            if isinstance(ctx, discord.ApplicationContext):
-                await ctx.respond("no!!!!!", ephemeral = True)
-            else:
-                # this appears every time the cog check in automod fails (server is not set up)
-                pass
-        else:
-            raise error
+            return await ctx.send(embed = embed)
+        elif isinstance(error, (commands.CheckFailure, commands.MissingPermissions)):
+            return  # ignore because this appears every time the cog check in automod fails (server is not set up)
+        
+        raise error
 
     @commands.command()
     async def info(self, ctx: commands.Context):
@@ -76,19 +78,19 @@ class main(commands.Cog):
         `t!quarantine | t!q    ` - shows information about current quarantines
         `t!q *[users]          ` - adds users to quarantine
         `  ^^^ + clear/kick/ban` - manages users in quarantine (+)
-        `t!sticker` | `t!emoji` - displays recently deleted emojis/stickers
+        ` t!sticker ` | ` t!emoji ` - displays recently deleted emojis/stickers
         """
 
         # page 2
         perm_help = """
         **Required permissions (user):**
-        `t!info      ` - none
-        `t!setup     ` - administrator
-        `t!allow     ` - administrator
-        `t!toggle    ` - manage roles, kick/ban
-        `t!lockdown  ` - manage roles, kick/ban
-        `t!priority  ` - administrator
-        `t!quarantine` - manage roles, kick/ban
+        `t!info            ` - none
+        `t!setup           ` - administrator
+        `t!allow           ` - administrator
+        `t!toggle          ` - manage roles, kick/ban
+        `t!lockdown        ` - manage roles, kick/ban
+        `t!priority        ` - administrator
+        `t!quarantine      ` - manage roles, kick/ban
         `t!sticker` | `t!emoji` - manage emojis/stickers
 
         **Required permissions (bot):**
