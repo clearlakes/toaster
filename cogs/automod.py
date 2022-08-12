@@ -37,7 +37,7 @@ async def e_or_s_list(ctx, msg, kind, cache = None):
     if cache is None:
         # get cache list from database
         db = database.Guild(ctx.guild)
-        guild = db.get()
+        guild = await db.get()
         
         cache = guild.emoji_cache if kind == 'emoji' else guild.sticker_cache
     
@@ -68,9 +68,13 @@ class automod(commands.Cog):
         self.client = client
 
     async def cog_check(self, ctx):
+        exists = await database.Guild(ctx.guild).exists()
+
         # disables commands until the user sets up the bot
-        if not database.Guild(ctx.guild).exists() and ctx.author.guild_permissions.administrator:
-            await ctx.send("**Error:** set up the bot with `t!setup` first")
+        if not exists:
+            if ctx.author.guild_permissions.administrator:
+                await ctx.send("**Error:** set up the bot with `t!setup` first")
+
             return False
         else:
             return True
@@ -96,7 +100,7 @@ class automod(commands.Cog):
             await view.wait()
             method = view.value
 
-        database.Guild(ctx.guild).set_field('method', method.lower())
+        await database.Guild(ctx.guild).set_field('method', method.lower())
         
         embed.description = f"Set the method to **{method.capitalize()}**."
         embed.color = discord.Color.brand_green()
@@ -112,7 +116,7 @@ class automod(commands.Cog):
     @commands.bot_has_permissions(manage_roles = True, kick_members = True, ban_members = True)
     async def quarantine(self, ctx: commands.Context, members: commands.Greedy[discord.Member], action: Optional[ValidAction]):
         db = database.Guild(ctx.guild)
-        guild = db.get()
+        guild = await db.get()
 
         # get quarantine role and users to manage 
         # (will be everyone with the quarantine role if no members are given)
@@ -217,7 +221,7 @@ class automod(commands.Cog):
     @commands.has_permissions(administrator = True)
     async def priority(self, ctx: commands.Context, channels: commands.Greedy[discord.TextChannel]):
         db = database.Guild(ctx.guild)
-        guild = db.get()
+        guild = await db.get()
 
         added = []
         removed = []
@@ -236,10 +240,10 @@ class automod(commands.Cog):
             for channel in channels:
                 # add or remove channels depending on if they're in the priority list
                 if channel.id not in guild.priority:
-                    db.push_to_list('priority', channel.id)
+                    await db.push_to_list('priority', channel.id)
                     added.append(channel.id)
                 else:
-                    db.pull_from_list('priority', channel.id)
+                    await db.pull_from_list('priority', channel.id)
                     removed.append(channel.id)
 
             if added:
@@ -254,7 +258,7 @@ class automod(commands.Cog):
     @commands.has_permissions(administrator = True)
     async def allow(self, ctx: commands.Context, roles: commands.Greedy[discord.Role]):
         db = database.Guild(ctx.guild)
-        guild = db.get()
+        guild = await db.get()
 
         added = []
         removed = []
@@ -273,10 +277,10 @@ class automod(commands.Cog):
             for role in roles:
                 # add or remove channels depending on if they're in the priority list
                 if not guild.allowed or role.id not in guild.allowed:
-                    db.push_to_list('allowed', role.id)
+                    await db.push_to_list('allowed', role.id)
                     added.append(role.id)
                 else:
-                    db.pull_from_list('allowed', role.id)
+                    await db.pull_from_list('allowed', role.id)
                     removed.append(role.id)
 
             if added:
@@ -320,13 +324,13 @@ class automod(commands.Cog):
     @commands.has_permissions(manage_roles = True, kick_members = True, ban_members = True)
     async def lockdown(self, ctx: commands.Context):
         db = database.Guild(ctx.guild)
-        guild = db.get()
+        guild = await db.get()
 
         embed = discord.Embed(color = self.client.gray)
 
         # toggle lockdown
         new_status = not guild.lockdown
-        db.set_field('lockdown', new_status)
+        await db.set_field('lockdown', new_status)
 
         status = "enabled" if new_status else "disabled"
         embed.description = f"Lockdown has been {status}!"

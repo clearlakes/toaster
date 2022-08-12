@@ -43,7 +43,7 @@ class main(commands.Cog):
             color = self.client.gray
         )
 
-        guild = database.Guild(ctx.guild).get()
+        guild = await database.Guild(ctx.guild).get()
 
         # add more information depending on if the guild has been set up
         if guild:
@@ -135,8 +135,10 @@ class main(commands.Cog):
         db = database.Guild(ctx.guild)
         embed = discord.Embed(color = self.client.gray)
 
-        # prevent user from running setup multiple times
-        if db.exists():
+        exists = await db.exists()
+
+        if exists:
+            # prevent user from running setup multiple times
             embed.description = "This server has been set up already!"
             return await ctx.send(embed = embed)
 
@@ -243,7 +245,7 @@ class main(commands.Cog):
         history = await ctx.message.guild.create_text_channel(name = 'toaster-history', overwrites = make_private(False))
         results.append(history.id)
 
-        db.add_guild(*results)
+        await db.add_guild(*results)
 
         embed.title = f"Setup Complete"
         embed.set_footer(text = "View the new commands you can use with t!help")

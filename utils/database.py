@@ -1,22 +1,23 @@
 import discord
 
+import motor.motor_asyncio
+
 from configparser import ConfigParser
 from typing import Union
-import pymongo
 
 config = ConfigParser()
 config.read("config.ini")
 
 # connect to database
 _db_url = str(config.get("server", "mongodb"))
-_mongo = pymongo.MongoClient(_db_url)
+_mongo = motor.motor_asyncio.AsyncIOMotorClient(_db_url)
 _db = _mongo.toaster.v2
 
 class Document:
     def __init__(self, document: dict):
         if document:
             # list of variables used throughout the bot
-            # this can probably be done in automatically but this allows for intellisense
+            # this can probably be done in automatically but this gives type hints
             get = lambda key: document.get(key)
             
             self.queue: list = get('queue')
@@ -45,47 +46,58 @@ class Guild:
         self.guild = {'guild_id': guild.id}
         self.guild_id = guild.id
 
-    def exists(self) -> bool:
+    async def exists(self) -> bool:
         """Checks if a guild exists in the database."""
-        return _db.count_documents(self.guild, limit = 1)
+        return await _db.count_documents(self.guild, limit = 1)
 
-    def delete(self) -> None:
+    async def delete(self) -> None:
         """Deletes a guild from the database."""
-        return _db.delete_one(self.guild)
+        await _db.delete_one(self.guild)
 
-    def increment(self, amount: int = 1) -> None:
+    async def increment(self, amount: int = 1) -> None:
         """Increases the total number of 'actions' by the amount specified."""
-        _db.update_one(self.guild, {'$inc': {'actions': amount}})
+        await _db.update_one(self.guild, {'$inc': {'actions': amount}})
 
-    def push_to_list(self, field: str, value) -> None:
+    async def push_to_list(self, field: str, value) -> None:
         """Pushes a value to the given field."""
-        _db.update_one(self.guild, {'$push': {field: {'$each': [value]}}})
+        await _db.update_one(self.guild, {'$push': {field: {'$each': [value]}}})
 
-    def pull_from_list(self, field: str, value) -> None:
+    async def pull_from_list(self, field: str, value) -> None:
         """Pulls (removes) a value from a given field."""
-        _db.update_one(self.guild, {'$pull': {field: value}})
+        await _db.update_one(self.guild, {'$pull': {field: value}})
     
-    def clear_list(self, field: str) -> None:
+    async def clear_list(self, field: str) -> None:
         """Clears the given field's list."""
-        _db.update_one(self.guild, {'$set': {field: []}})
+        await _db.update_one(self.guild, {'$set': {field: []}})
 
-    def set_field(self, field: str, value) -> None:
+    async def set_field(self, field: str, value) -> None:
         """Creates/sets the specified field to a given value."""
-        _db.update_one(self.guild, {'$set': {field: value}})
+        await _db.update_one(self.guild, {'$set': {field: value}})
     
-    def del_field(self, field: str) -> None:
+    async def del_field(self, field: str) -> None:
         """Removes the specified field."""
-        _db.update_one(self.guild, {'$unset': {field: 1}})
+        await _db.update_one(self.guild, {'$unset': {field: 1}})
 
-    def get(self) -> Union[Document, None]:
+    async def get(self) -> Union[Document, None]:
         """Returns the guild's database entry as a class."""
-        _doc = _db.find_one(self.guild)
+        _doc = await _db.find_one(self.guild)
         
         return Document(_doc) if _doc else None
 
-    def add_guild(self, method: str, log_id: int, min_age: int, watch_channels: bool, watch_emojis: bool, watch_roles: bool, q_role: int, wait_id: int, history: int) -> None:
+    async def add_guild(
+        self, 
+        method: str, 
+        log_id: int, 
+        min_age: int, 
+        watch_channels: bool, 
+        watch_emojis: bool, 
+        watch_roles: bool, 
+        q_role: int, 
+        wait_id: int, 
+        history: int
+    ) -> None:
         """Adds a guild to the database using the ids given in setup."""
-        _db.insert_one({
+        await _db.insert_one({
             'guild_id': self.guild_id,
             'actions': 0,
             'log_id': log_id,

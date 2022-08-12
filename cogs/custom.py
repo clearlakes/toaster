@@ -50,7 +50,7 @@ class custom(commands.Cog):
     @commands.has_permissions(administrator = True)
     async def watch(self, ctx: commands.Context, topic: str = None, *, intervals: str = None):
         db = database.Guild(ctx.guild)
-        guild = db.get()
+        guild = await db.get()
 
         embed = discord.Embed(color = self.client.gray)
 
@@ -79,7 +79,7 @@ class custom(commands.Cog):
         # delete the topic if it exists 
         elif guild.strike_topics and topic in guild.strike_topics:
             guild.strike_topics.pop(topic, None)
-            db.set_field(f'strike_topics', guild.strike_topics)
+            await db.set_field(f'strike_topics', guild.strike_topics)
 
             embed.description = f"Removed topic **{topic}**."
 
@@ -88,7 +88,7 @@ class custom(commands.Cog):
             if not intervals:
                 return await ctx.send(f"**Error:** missing actions")
 
-            db.set_field(f'strike_topics.{topic}', {
+            await db.set_field(f'strike_topics.{topic}', {
                 'intervals': intervals.split(),
                 'users': {}
             })
@@ -99,7 +99,7 @@ class custom(commands.Cog):
 
     async def topic_generator(ctx: discord.AutocompleteContext) -> list[str]:
         db = database.Guild(ctx.interaction.guild)
-        guild = db.get()
+        guild = await db.get()
 
         return list(guild.strike_topics.keys())
 
@@ -120,7 +120,7 @@ class custom(commands.Cog):
         member: discord.Option(discord.Member, "choose a member to check")
     ):
         db = database.Guild(ctx.guild)
-        guild = db.get()
+        guild = await db.get()
 
         strikes = []
 
@@ -146,7 +146,7 @@ class custom(commands.Cog):
         topic: discord.Option(str, "choose a topic to check", autocomplete = topic_generator)
     ):
         db = database.Guild(ctx.guild)
-        guild = db.get()
+        guild = await db.get()
 
         user_list = [(user, strike, time) for user, (strike, time) in guild.strike_topics[topic]["users"].items()]
         embed = discord.Embed(color = self.client.gray)
@@ -175,7 +175,7 @@ class custom(commands.Cog):
         topic: discord.Option(str, "choose a strike topic", autocomplete = topic_generator)
     ):
         db = database.Guild(ctx.guild)
-        guild = db.get()
+        guild = await db.get()
 
         embed = discord.Embed(color = self.client.gray)
         t = guild.strike_topics[topic]
@@ -191,9 +191,9 @@ class custom(commands.Cog):
             field = f'strike_topics.{topic}.users.{str(member.id)}'
 
             if new_strikes == 0:
-                db.del_field(field)  # delete the field if no strikes left
+                await db.del_field(field)  # delete the field if no strikes left
             else:
-                db.set_field(field, [new_strikes, time_of_last_strike])
+                await db.set_field(field, [new_strikes, time_of_last_strike])
 
             strike_difference = f"{user_info[0]} -> **{new_strikes}**"
             embed.description = f"removed a strike from {member.mention} for `{topic}` ({strike_difference})"
@@ -210,7 +210,7 @@ class custom(commands.Cog):
         topic: discord.Option(str, "choose a strike topic", autocomplete = topic_generator)
     ):
         db = database.Guild(ctx.guild)
-        guild = db.get()
+        guild = await db.get()
 
         t = guild.strike_topics[topic]
         intervals: list[str] = t['intervals']
@@ -235,7 +235,7 @@ class custom(commands.Cog):
 
             current_strike = user_info[0] + 1
         
-        db.set_field(f'strike_topics.{topic}.users.{str(member.id)}', [current_strike, now])
+        await db.set_field(f'strike_topics.{topic}.users.{str(member.id)}', [current_strike, now])
         
         # get the respective action for the strike
         if (i := current_strike) <= len(intervals):

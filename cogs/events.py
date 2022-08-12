@@ -39,11 +39,11 @@ class events(commands.Cog):
     async def quarantine(self, member: discord.Member):
         """Quarantines the specified user (or adds them to the queue)."""
         db = database.Guild(member.guild)
-        guild = db.get()
+        guild = await db.get()
 
         q_role = member.guild.get_role(guild.q_role_id)
         await member.add_roles(q_role)
-        db.increment()
+        await db.increment()
 
         # quarantine the user if there are less than 5 active ones (else, add them to the queue)
         if len(guild.quarantine) < 5:
@@ -73,17 +73,17 @@ class events(commands.Cog):
 
             # create the quarantine channel
             channel = await member.guild.create_text_channel(f"quarantine-{member.name.replace(' ', '')[0:5]}", overwrites = overwrites, category = log.category)
-            db.set_field(f'quarantine.{member.id}', channel.id)
+            await db.set_field(f'quarantine.{member.id}', channel.id)
 
             return f"<#{channel.id}>"
         else:
-            db.push_to_list('queue', member.id)
+            await db.push_to_list('queue', member.id)
             return f"Queued - #{len(guild.queue) + 1}"
 
     async def remove_quarantine(self, member: discord.Member, reason: str):
         """Removes a user from quarantine/the queue."""
         db = database.Guild(member.guild)
-        guild = db.get()
+        guild = await db.get()
 
         if guild is None:
             return
@@ -127,8 +127,8 @@ class events(commands.Cog):
                 what = f"Removed {member} from the queue ({reason})"
 
             # remove the quarantine from the guild's database
-            db.del_field(f'quarantine.{member.id}')
-            db.pull_from_list('queue', member.id)
+            await db.del_field(f'quarantine.{member.id}')
+            await db.pull_from_list('queue', member.id)
             
             # add an entry to the log channel
             log = member.guild.get_channel(guild.log_id)
@@ -141,10 +141,10 @@ class events(commands.Cog):
 
             # if the user was in a quarantine channel, pull in the next person in the queue
             if str(member.id) in guild.quarantine and len(guild.queue) > 0 and guild.method == 'quarantine':
-                guild = db.get()
+                guild = await db.get()
                 next_member = member.guild.get_member(guild.queue[0])
 
-                db.pull_from_list('queue', next_member.id)
+                await db.pull_from_list('queue', next_member.id)
                 await self.quarantine(next_member)
 
                 embed.set_author(name = f"Moved {next_member} into quarantine #{len(guild.quarantine) + 1}", icon_url = next_member.display_avatar)
@@ -155,7 +155,7 @@ class events(commands.Cog):
     async def log_action(self, deleted: Union[discord.abc.GuildChannel, discord.Emoji, discord.GuildSticker, discord.Role]):
         """Adds entries for when something is deleted."""
         db = database.Guild(deleted.guild)
-        guild = db.get()
+        guild = await db.get()
 
         if guild is None:
             return
@@ -201,10 +201,10 @@ class events(commands.Cog):
                 if len(amount_deleted) < 3:
                     # clear the cache if it has 10 or more entries in it
                     if len(cache) >= 10:
-                        db.clear_list(f'{kind[1]}_cache')
+                        await db.clear_list(f'{kind[1]}_cache')
 
                     entry = [int(now.timestamp()), entry.user.id, deleted.name]
-                    db.push_to_list(f'{kind[1]}_cache', entry)
+                    await db.push_to_list(f'{kind[1]}_cache', entry)
                     return
                 
                 # list what was deleted as the reason
@@ -245,15 +245,15 @@ class events(commands.Cog):
 
         # cache emojis and stickers
         elif isinstance(deleted, discord.Emoji):
-            return db.push_to_list('emoji_cache', [deleted.id, deleted.name])
+            return await db.push_to_list('emoji_cache', [deleted.id, deleted.name])
 
         elif isinstance(deleted, discord.GuildSticker):
-            return db.push_to_list('sticker_cache', [deleted.id, deleted.name])
+            return await db.push_to_list('sticker_cache', [deleted.id, deleted.name])
 
     @commands.Cog.listener()
     async def on_guild_remove(self, guild: discord.Guild):
         # remove the guild from the database if they kick the bot
-        database.Guild(guild).delete()
+        await database.Guild(guild).delete()
     
     @commands.Cog.listener()
     async def on_guild_emojis_update(self, guild, before, after):
@@ -298,23 +298,23 @@ class events(commands.Cog):
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
         # checks if the quarantine role was given/removed
-        def is_quarantine(role: discord.Role):
-            guild = database.Guild(after.guild).get()
+        async def is_quarantine(role: discord.Role):
+            guild = await database.Guild(after.guild).get()
 
             if not guild or not role:
                 return False
 
             return (role.id == guild.q_role_id)
 
-        deleted_role = self.find_missing(before.roles, after.roles)
-        added_role = self.find_missing(after.roles, before.roles)
+        deleted_role = await is_quarantine(self.find_missing(before.roles, after.roles))
+        added_role = await is_quarantine(self.find_missing(after.roles, before.roles))
 
         # if quarantine role was removed
-        if is_quarantine(deleted_role):
+        if deleted_role:
             await self.remove_quarantine(after, "cleared")
 
         # if quarantine role was added
-        elif is_quarantine(added_role):
+        elif added_role:
             # get the user that added the role
             entry = await after.guild.audit_logs(action = discord.AuditLogAction.member_role_update, limit = 1).get(target = after)
 
@@ -331,7 +331,7 @@ class events(commands.Cog):
                 extra = position
             )
 
-            log_id = database.Guild(after.guild).get().log_id
+            log_id = (await database.Guild(after.guild).get()).log_id
             log = after.guild.get_channel(log_id)
 
             await log.send(embed = log_embed)
@@ -339,7 +339,7 @@ class events(commands.Cog):
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         db = database.Guild(member.guild)
-        guild = db.get()
+        guild = await db.get()
         extra = None
 
         if guild is None:

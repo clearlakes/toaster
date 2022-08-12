@@ -39,7 +39,7 @@ async def create(kind, interaction: discord.Interaction, db: database.Guild, cho
             created.append(await interaction.guild.create_sticker(name = sticker[1], file = file))
     
     # remove all added emojis from cache
-    db.pull_from_list(f'{kind}_cache', {'$in': chosen_list})
+    await db.pull_from_list(f'{kind}_cache', {'$in': chosen_list})
 
     return created
 
