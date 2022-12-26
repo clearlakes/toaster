@@ -9,9 +9,12 @@ config = ConfigParser()
 config.read("config.ini")
 
 # connect to database
-_db_url = str(config.get("server", "mongodb"))
-_mongo = motor.motor_asyncio.AsyncIOMotorClient(_db_url)
-_db = _mongo.toaster.v2
+_mongo_uri = str(config.get("mongo", "uri"))
+_mongo_db_name = str(config.get("mongo", "database"))
+_mongo_coll_name = str(config.get("mongo", "collection"))
+
+_mongo_client = motor.motor_asyncio.AsyncIOMotorClient(_mongo_uri)
+_db = _mongo_client[_mongo_db_name][_mongo_coll_name]
 
 class Document:
     def __init__(self, document: dict):
@@ -19,7 +22,7 @@ class Document:
             # list of variables used throughout the bot
             # this can probably be done in automatically but this gives type hints
             get = lambda key: document.get(key)
-            
+
             self.queue: list = get('queue')
             self.method: str = get('method')
             self.log_id: int = get('log_id')
@@ -65,7 +68,7 @@ class Guild:
     async def pull_from_list(self, field: str, value) -> None:
         """Pulls (removes) a value from a given field."""
         await _db.update_one(self.guild, {'$pull': {field: value}})
-    
+
     async def clear_list(self, field: str) -> None:
         """Clears the given field's list."""
         await _db.update_one(self.guild, {'$set': {field: []}})
@@ -73,7 +76,7 @@ class Guild:
     async def set_field(self, field: str, value) -> None:
         """Creates/sets the specified field to a given value."""
         await _db.update_one(self.guild, {'$set': {field: value}})
-    
+
     async def del_field(self, field: str) -> None:
         """Removes the specified field."""
         await _db.update_one(self.guild, {'$unset': {field: 1}})
@@ -81,19 +84,19 @@ class Guild:
     async def get(self) -> Union[Document, None]:
         """Returns the guild's database entry as a class."""
         _doc = await _db.find_one(self.guild)
-        
+
         return Document(_doc) if _doc else None
 
     async def add_guild(
-        self, 
-        method: str, 
-        log_id: int, 
-        min_age: int, 
-        watch_channels: bool, 
-        watch_emojis: bool, 
-        watch_roles: bool, 
-        q_role: int, 
-        wait_id: int, 
+        self,
+        method: str,
+        log_id: int,
+        min_age: int,
+        watch_channels: bool,
+        watch_emojis: bool,
+        watch_roles: bool,
+        q_role: int,
+        wait_id: int,
         history: int
     ) -> None:
         """Adds a guild to the database using the ids given in setup."""

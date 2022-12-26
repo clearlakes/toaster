@@ -1,7 +1,9 @@
 import discord
 from discord.ext import commands
-from discord.commands import SlashCommandGroup
+from discord import app_commands
 
+from utils.base import BaseCog, BaseEmbed
+from utils.views import Paginator
 from utils import database
 
 from datetime import datetime, timedelta
@@ -11,24 +13,25 @@ import re
 config = ConfigParser()
 config.read("config.ini")
 
-slash_guilds = [int(x) for x in str(config.get("server", "custom_ids")).split(', ')]
+slash_guild = discord.Object(int(config.get("bot", "slash_guild")))
 
-class custom(commands.Cog):
-    def __init__(self, client):
-        self.client: commands.Bot = client
-
+class Custom(BaseCog):
     async def log_strike(
         self,
-        ctx: discord.ApplicationContext, 
-        log_id: int, 
+        interaction: discord.Interaction,
+        log_id: int,
         strike_difference: str,
         member: discord.Member,
         topic: str,
         action: str = None,
         removed: bool = False
     ):
-        log = ctx.interaction.guild.get_channel(log_id)
-        log_embed = discord.Embed(color = self.client.gray, timestamp = datetime.now())
+        log = interaction.guild.get_channel(log_id)
+
+        if not log:
+            return  # if the log channel is missing don't do anything
+
+        log_embed = BaseEmbed(timestamp = datetime.now())
 
         if removed:
             title = "Strike Removed"
@@ -36,15 +39,30 @@ class custom(commands.Cog):
         else:
             title = "Strike Added"
             field_title = "To:"
-        
+
         log_embed.set_author(name = title, icon_url = member.display_avatar)
         log_embed.add_field(name = field_title, value = f"{member.mention}\nstrike {strike_difference}")
-        log_embed.add_field(name = "By:", value = f"{ctx.author.mention}\nfor `{topic}`")
+        log_embed.add_field(name = "By:", value = f"{interaction.user.mention}\nfor `{topic}`")
 
         if not removed:
             log_embed.set_footer(text = f"Action: {' '.join(action)}")
 
         await log.send(embed = log_embed)
+
+    async def topic_generator(self, interaction: discord.Interaction, current: str) -> list[str]:
+        db = database.Guild(interaction.guild)
+        guild = await db.get()
+
+        return [
+            app_commands.Choice(name = t, value = t)
+            for t in list(guild.strike_topics.keys()) if current.lower() in t.lower()
+        ]
+
+    @commands.command()
+    @commands.is_owner()
+    async def sync(self, ctx: commands.Context):
+        await self.client.tree.sync(guild = slash_guild)  # updates slash commands
+        await ctx.send("ok")
 
     @commands.command(aliases = ["w"])
     @commands.has_permissions(administrator = True)
@@ -52,7 +70,7 @@ class custom(commands.Cog):
         db = database.Guild(ctx.guild)
         guild = await db.get()
 
-        embed = discord.Embed(color = self.client.gray)
+        embed = BaseEmbed()
 
         # list strike topics if nothing is given
         if not topic:
@@ -70,13 +88,13 @@ class custom(commands.Cog):
                     intervals = '`' + '`, `'.join(topic['intervals']) + '`'
 
                     topics += f"**{st}** ({intervals}) - {total_strikes} total strikes\n"
-                
+
                 embed.description = topics
                 embed.set_footer(text = "Use t!watch (topic) to remove a topic")
             else:
                 embed.description = "not watching anything right now"
 
-        # delete the topic if it exists 
+        # delete the topic if it exists
         elif guild.strike_topics and topic in guild.strike_topics:
             guild.strike_topics.pop(topic, None)
             await db.set_field(f'strike_topics', guild.strike_topics)
@@ -97,87 +115,66 @@ class custom(commands.Cog):
 
         await ctx.send(embed = embed)
 
-    async def topic_generator(ctx: discord.AutocompleteContext) -> list[str]:
-        db = database.Guild(ctx.interaction.guild)
-        guild = await db.get()
-
-        return list(guild.strike_topics.keys())
-
-    check = SlashCommandGroup(
-        "check", 
-        "Lists strikes for a user or topic", 
-        checks = [
-            commands.has_permissions(
-                kick_members = True, 
-                ban_members = True
-            ).predicate
-        ]
+    check = discord.app_commands.Group(
+        name = "check",
+        description = "Lists strikes for a user or topic",
+        default_permissions = discord.Permissions(kick_members = True, ban_members = True)
     )
-    
-    @check.command(guild_ids = slash_guilds, description = "Check a user's strikes", checks = check.checks)
-    async def user(self, 
-        ctx: discord.ApplicationContext, 
-        member: discord.Option(discord.Member, "choose a member to check")
-    ):
-        db = database.Guild(ctx.guild)
+
+    @check.command(description = "Check a user's strikes")
+    @app_commands.describe(member = "choose a member to check")
+    async def user(self, interaction: discord.Interaction, member: discord.Member):
+        db = database.Guild(interaction.guild)
         guild = await db.get()
 
-        strikes = []
+        user_strikes = []
 
-        for topic in guild.strike_topics:
-            if str(member.id) in (t := guild.strike_topics[topic]["users"]):
-                strikes.append((topic, t[str(member.id)][0]))
+        for t in guild.strike_topics:
+            if (id := str(member.id)) in (st := guild.strike_topics[t]["users"]):
+                user_strikes.append(tuple([t, *st[id]]))
 
-        embed = discord.Embed(color = self.client.gray)
+        user_strikes.sort(key = lambda item: item[1], reverse = True)
+        strike_list = [f"**{topic}** - `{strikes}` - <t:{time}:R>" for (topic, strikes, time) in user_strikes]
 
-        if not strikes:
-            embed.description = f"{member.mention} hasn't been striked for anything yet"
+        if not strike_list:
+            embed = BaseEmbed(description = f"{member.mention} hasn't been striked for anything yet")
+            await interaction.response.send_message(embed = embed, ephemeral = True)
         else:
-            embed.set_author(name = f"{member.name}'s strikes", icon_url = member.display_avatar)
+            view = Paginator(f"{member.name}'s strikes", strike_list)
+            await interaction.response.send_message(embed = view.pages[0], view = view, ephemeral = True)
 
-            for (topic, amount) in strikes:
-                embed.add_field(name = topic, value = amount)
-
-        await ctx.respond(embed = embed, ephemeral = True)
-    
-    @check.command(guild_ids = slash_guilds, description = "Check a topic's strikes", checks = check.checks)
-    async def topic(self, 
-        ctx: discord.ApplicationContext, 
-        topic: discord.Option(str, "choose a topic to check", autocomplete = topic_generator)
-    ):
-        db = database.Guild(ctx.guild)
+    @check.command(description = "Check a topic's strikes")
+    @app_commands.describe(topic = "choose a topic to check")
+    @app_commands.autocomplete(topic = topic_generator)
+    async def topic(self, interaction: discord.Interaction, topic: str):
+        db = database.Guild(interaction.guild)
         guild = await db.get()
 
-        user_list = [(user, strike, time) for user, (strike, time) in guild.strike_topics[topic]["users"].items()]
-        embed = discord.Embed(color = self.client.gray)
+        topic_strikes = []
 
-        if not user_list:
-            embed.description = f"nobody has been striked for `{topic}` so far"
+        for u in (st := guild.strike_topics[topic]["users"]):
+            topic_strikes.append(tuple([u, *st[u]]))
+
+        topic_strikes.sort(key = lambda item: item[1], reverse = True)
+        strike_list = [f"<@{user}> - `{strikes}` - <t:{time}:R> " for (user, strikes, time) in topic_strikes]
+
+        if not strike_list:
+            embed = BaseEmbed(description = f"nobody has been striked for `{topic}` so far")
+            await interaction.response.send_message(embed = embed, ephemeral = True)
         else:
-            intervals = "`" + "` -> `".join(guild.strike_topics[topic]["intervals"]) + "`"
-            embed.description = f"Strikes for **{topic}** ({intervals}):\n"
+            view = Paginator(f"{topic} strikes", strike_list)
+            await interaction.response.send_message(embed = view.pages[0], view = view, ephemeral = True)
 
-            users = "\n".join(f"<@{user}>" for (user, _, _) in user_list)
-            strikes = "\n".join(f"{strike}" for (_, strike, _) in user_list)
-            times = "\n".join(f"<t:{time}:R>" for (_, _, time) in user_list)
-
-            embed.add_field(name = "User", value = users)
-            embed.add_field(name = "Strikes", value = strikes)
-            embed.add_field(name = "Last Updated", value = times)
-        
-        await ctx.respond(embed = embed, ephemeral = True)
-
-    @discord.slash_command(guild_ids = slash_guilds, description = "Un-strike a member")
-    @commands.has_permissions(kick_members = True, ban_members = True)
-    async def unstrike(self,
-        ctx: discord.ApplicationContext, 
-        member: discord.Option(discord.Member, "choose a member to un-strike"),
-        topic: discord.Option(str, "choose a strike topic", autocomplete = topic_generator)
-    ):
-        db = database.Guild(ctx.guild)
+    @app_commands.command(description = "Un-strike a member")
+    @app_commands.describe(member = "choose a member to un-strike", topic = "choose a strike topic")
+    @app_commands.autocomplete(topic = topic_generator)
+    @app_commands.default_permissions(kick_members = True, ban_members = True)
+    @app_commands.guilds(slash_guild)
+    async def unstrike(self, interaction: discord.Interaction, member: discord.Member, topic: str):
+        db = database.Guild(interaction.guild)
         guild = await db.get()
 
-        embed = discord.Embed(color = self.client.gray)
+        embed = BaseEmbed()
         t = guild.strike_topics[topic]
 
         user_info = t['users'][str(member.id)] if str(member.id) in t['users'] else [0, None]
@@ -198,25 +195,24 @@ class custom(commands.Cog):
             strike_difference = f"{user_info[0]} -> **{new_strikes}**"
             embed.description = f"removed a strike from {member.mention} for `{topic}` ({strike_difference})"
 
-            await self.log_strike(ctx, guild.log_id, strike_difference, member, topic, removed = True)
+            await self.log_strike(interaction, guild.log_id, strike_difference, member, topic, removed = True)
 
-        await ctx.respond(embed = embed, ephemeral = True)
+        await interaction.response.send_message(embed = embed, ephemeral = True)
 
-    @discord.slash_command(guild_ids = slash_guilds, description = "Strike a member for something")
-    @commands.has_permissions(kick_members = True, ban_members = True)
-    async def strike(self, 
-        ctx: discord.ApplicationContext, 
-        member: discord.Option(discord.Member, "choose a member to strike"), 
-        topic: discord.Option(str, "choose a strike topic", autocomplete = topic_generator)
-    ):
-        db = database.Guild(ctx.guild)
+    @app_commands.command(description = "Strike a member for something")
+    @app_commands.describe(member = "choose a member to strike", topic = "choose a strike topic")
+    @app_commands.autocomplete(topic = topic_generator)
+    @app_commands.default_permissions(kick_members = True, ban_members = True)
+    @app_commands.guilds(slash_guild)
+    async def strike(self, interaction: discord.Interaction, member: discord.Member, topic: str):
+        db = database.Guild(interaction.guild)
         guild = await db.get()
 
         t = guild.strike_topics[topic]
         intervals: list[str] = t['intervals']
 
         now = int(datetime.now().timestamp())
-        
+
         # increment the user's strikes (and store the previous value)
         if str(member.id) not in t['users']:
             current_strike = 1
@@ -226,17 +222,13 @@ class custom(commands.Cog):
             a_minute_ago = int((datetime.now() - timedelta(minutes = 1)).timestamp())
 
             if user_info[1] >= a_minute_ago:
-                embed = discord.Embed(
-                    description = f"{member.mention} has already been striked for `{topic}` in the last minute or so",
-                    color = self.client.gray
-                )
-
-                return await ctx.respond(embed = embed, ephemeral = True)
+                embed = BaseEmbed(description = f"{member.mention} has already been striked for `{topic}` in the last minute or so")
+                return await interaction.response.send_message(embed = embed, ephemeral = True)
 
             current_strike = user_info[0] + 1
-        
+
         await db.set_field(f'strike_topics.{topic}.users.{str(member.id)}', [current_strike, now])
-        
+
         # get the respective action for the strike
         if (i := current_strike) <= len(intervals):
             interval = intervals[i - 1]
@@ -246,7 +238,7 @@ class custom(commands.Cog):
         action = interval[0]
 
         if action not in ("m", "b"):
-            await ctx.respond(f"**Error:** could not make the command, invalid action `{interval}`", ephemeral = True)
+            return await interaction.response.send_message(f"**Error:** could not make the command, invalid action `{interval}`", ephemeral = True)
 
         # multiply or add to punishment length if specified
         if len(num := re.findall(r'\d+', interval)) == 2:
@@ -274,42 +266,39 @@ class custom(commands.Cog):
             cmd = f";ban {member.id} {topic}"
 
         custom_removed = False
-        
-        if topic == "nsfw" and ctx.guild_id == 920012669090660414 and current_strike == 2:
+
+        if topic == "nsfw" and interaction.guild_id == 920012669090660414 and current_strike == 2:
             no_perm_roles = [
-                ctx.guild.get_role(973744500189044837),
-                ctx.guild.get_role(920166105488711750)
+                interaction.guild.get_role(973744500189044837),
+                interaction.guild.get_role(920166105488711750)
             ]
             perm_roles = [
-                ctx.guild.get_role(920159184559931432),
-                ctx.guild.get_role(920166390357438554)
+                interaction.guild.get_role(920159184559931432),
+                interaction.guild.get_role(920166390357438554)
             ]
 
             await member.add_roles(*no_perm_roles)
             await member.remove_roles(*perm_roles)
 
             custom_removed = True
-        
+
         # remove semicolon and get command name with time interval
         action = cmd[1:].split(' ')[0::2]
 
-        # if the command is just ;ban, remove the topic 
+        # if the command is just ;ban, remove the topic
         # (it would be the second string)
         if action[1] == topic:
             action.pop(1)
 
         strike_difference = f"{current_strike - 1} -> **{current_strike}**"
 
-        embed = discord.Embed(
-            description = f"added a strike to {member.mention} for `{topic}` ({current_strike - 1} -> **{current_strike}**)\ncopy the command above (or long press if you're on mobile)",
-            color = self.client.gray
-        )
+        embed = BaseEmbed(description = f"added a strike to {member.mention} for `{topic}` ({current_strike - 1} -> **{current_strike}**)\ncopy the command above (or long press if you're on mobile)")
 
         if custom_removed:
             embed.description += "\n**(also removed image perms for you)**"
 
-        await ctx.respond(cmd, embed = embed, ephemeral = True)
-        await self.log_strike(ctx, guild.log_id, strike_difference, member, topic, action)
+        await interaction.response.send_message(cmd, embed = embed, ephemeral = True)
+        await self.log_strike(interaction, guild.log_id, strike_difference, member, topic, action)
 
-def setup(bot):
-    bot.add_cog(custom(bot))
+async def setup(bot: commands.Bot):
+    await bot.add_cog(Custom(bot))

@@ -3,35 +3,41 @@ from discord.ext import commands
 
 from configparser import ConfigParser
 from datetime import datetime
+import aiohttp
+import logging
 
-# get the current time (used for getting uptime later on)
-start_time = datetime.now()
+class Toaster(commands.Bot):
+    def __init__(self):
+        super().__init__(
+            help_command = None,
+            command_prefix = commands.when_mentioned_or("t!"),
+            intents = discord.Intents.all()
+        )
 
-# read the config file for the token
-config = ConfigParser()
-config.read("config.ini")
+        self.log = logging.getLogger("discord")
+        self.log.name = ""
 
-token = str(config.get("server", "token"))
+        config = ConfigParser()
+        config.read("config.ini")
 
-# get discord intents and command prefix to use
-intents = discord.Intents.all()
-client = commands.Bot(command_prefix=commands.when_mentioned_or("t!"), intents=intents)
+        self.init_time = datetime.now()
+        self.token = str(config.get("bot", "token"))
 
-# remove default help command
-client.remove_command('help')
+    async def setup_hook(self):
+        self.session = aiohttp.ClientSession(loop = self.loop)
 
-client.initialized_at = start_time
-client.gray = 0x2f3136
+        for cog in ["automod", "custom", "events", "main"]:
+            await self.load_extension(f"cogs.{cog}")
 
-@client.event
-async def on_ready():    
-    # load cogs
-    for cog in ["automod", "custom", "events", "main"]:
-        client.load_extension(f"cogs.{cog}", store = False)
+    async def on_ready(self):
+        self.log.info("toaster ready")
 
-    await client.sync_commands()
+    async def close(self):
+        await self.session.close()
 
-    print("toaster ready")
+    def run(self):
+        super().run(self.token, reconnect = True)
 
-# start the bot
-client.run(token)
+if __name__ == '__main__':
+    toaster = Toaster()
+    toaster.run()

@@ -1,20 +1,19 @@
 import discord
-from discord.ext import commands, pages
+from discord.ext import commands
+from discord import app_commands
 
-from utils.views import DropdownView, ConfirmView
+from utils.views import DropdownView, ConfirmView, HelpView
+from utils.base import BaseCog, BaseEmbed
 from utils import database
 
 from datetime import datetime, timedelta
 
-class main(commands.Cog):
-    def __init__(self, client):
-        self.client = client
-
+class Main(BaseCog):
     @commands.Cog.listener()
-    async def on_application_command_error(self, ctx: discord.ApplicationContext, error: commands.CommandError):
+    async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         if isinstance(error, commands.MissingPermissions):
-            return await ctx.respond("https://i.imgur.com/aMQHEWC.jpg", ephemeral = True)
-        
+            return await interaction.response.send_message("https://i.imgur.com/aMQHEWC.jpg", ephemeral = True)
+
         raise error
 
     @commands.Cog.listener()
@@ -32,108 +31,49 @@ class main(commands.Cog):
             return await ctx.send(embed = embed)
         elif isinstance(error, (commands.CheckFailure, commands.MissingPermissions)):
             return  # ignore because this appears every time the cog check in automod fails (server is not set up)
-        
+
         raise error
 
     @commands.command()
     async def info(self, ctx: commands.Context):
-        embed = discord.Embed(
+        embed = BaseEmbed(
             title = "toaster",
             description = "A bot that manages new accounts and helps prevent server nukes.\nUse `t!help` to see a list of commands.",
-            color = self.client.gray
         )
 
         guild = await database.Guild(ctx.guild).get()
 
         # add more information depending on if the guild has been set up
         if guild:
-            actions = f"**{guild.actions}**"
+            quarantined = f"**`{len(guild.quarantine) + len(guild.queue)}` currently** - `{guild.actions}` all time"
             method = f"**{guild.method.capitalize()}**"
 
-            embed.add_field(name = "Total Quarantined", value = actions)
+            embed.add_field(name = "Quarantined Users", value = quarantined)
             embed.add_field(name = "Method", value = method)
         else:
             embed.description += "\n**Run `t!setup` to use the quarantine commands.**"
 
         # get the uptime
         current_time = datetime.now()
-        difference = current_time - self.client.initialized_at
+        difference = current_time - self.client.init_time
 
-        embed.add_field(name = "Uptime", value = f"**{str(difference).split('.')[0]}**")
+        embed.add_field(name = "Uptime", value = f"**`{str(difference).split('.')[0]}`**")
         embed.set_thumbnail(url = self.client.user.display_avatar)
         embed.set_footer(text = "version 2 • made by buh#7797")
 
         await ctx.send(embed = embed)
-    
+
     @commands.command()
     async def help(self, ctx: commands.Context):
-        # page 1
-        command_help = """
-        `t!info                ` - lists information about the bot
-        `t!setup               ` - sets up the quarantine functionality of the bot
-        `t!allow *[roles]      ` - allows specified roles to view quarantines
-        `t!toggle *[method]    ` - changes the mode of the bot
-        `t!lockdown            ` - applies the current method to anyone joining
-        `t!priority *[channels]` - distinguishes important channels
-        `t!quarantine | t!q    ` - shows information about current quarantines
-        `t!q *[users]          ` - adds users to quarantine
-        `  ^^^ + clear/kick/ban` - manages users in quarantine (+)
-        ` t!sticker ` | ` t!emoji ` - displays recently deleted emojis/stickers
-        """
-
-        # page 2
-        perm_help = """
-        **Required permissions (user):**
-        `t!info            ` - none
-        `t!setup           ` - administrator
-        `t!allow           ` - administrator
-        `t!toggle          ` - manage roles, kick/ban
-        `t!lockdown        ` - manage roles, kick/ban
-        `t!priority        ` - administrator
-        `t!quarantine      ` - manage roles, kick/ban
-        `t!sticker` | `t!emoji` - manage emojis/stickers
-
-        **Required permissions (bot):**
-        manage emojis/roles/channels, kick/ban, view audit log, read message history
-        """
-
-        embeds = [
-            discord.Embed(title = "Help - Commands", color = self.client.gray, description = command_help),
-            discord.Embed(title = "Help - Permissions", color = self.client.gray, description = perm_help)
-        ]
-
-        embeds[0].set_footer(text = '*: arguments are optional\n+: applies to everyone in quarantine if nobody is specified')
-        
-        # create a paginator that only shows one button at a time
-        paginator = pages.Paginator(
-            embeds, 
-            show_disabled = False, 
-            show_indicator = False,
-            use_default_buttons = False,
-            timeout = None
-        )
-
-        # rename buttons
-        paginator.add_button(
-            pages.PaginatorButton(
-                "next", style=discord.ButtonStyle.secondary, label = "permissions"
-            )
-        )
-
-        paginator.add_button(
-            pages.PaginatorButton(
-                "prev", style=discord.ButtonStyle.secondary, label = "commands"
-            )
-        )
-
-        await paginator.send(ctx)
+        embed, view = HelpView(ctx).get_embed_and_view
+        view.msg = await ctx.send(embed = embed, view = view)
 
     @commands.command()
     @commands.has_permissions(administrator = True)
     @commands.bot_has_permissions(manage_emojis = True, manage_roles = True, manage_channels = True, kick_members = True, ban_members = True, view_audit_log = True, read_message_history = True)
     async def setup(self, ctx: commands.Context):
         db = database.Guild(ctx.guild)
-        embed = discord.Embed(color = self.client.gray)
+        embed = BaseEmbed()
 
         exists = await db.exists()
 
@@ -195,7 +135,7 @@ class main(commands.Cog):
             # switch to confirm view for yes/no questions
             elif index >= 3:
                 view = ConfirmView(ctx)
-            
+
             # edit the main message with the new question
             await main_msg.edit(embed = embed, view = view)
 
@@ -230,10 +170,9 @@ class main(commands.Cog):
         }
 
         # send embed to #waiting-room explaining what it is for queued users
-        wait_embed = discord.Embed(
+        wait_embed = BaseEmbed(
             title = "Waiting Room",
             description = "If you are seeing this message, many new accounts are joining at this time. Please wait until a moderator is able to see you!",
-            color = discord.Color.og_blurple()
         )
 
         waitroom = await ctx.message.guild.create_text_channel(name = 'waiting-room', overwrites = make_private(True))
@@ -255,7 +194,7 @@ class main(commands.Cog):
         setup_info = ""
 
         # display results
-        for index, (result, result_desc) in enumerate(zip(results, [q[1] for q in questions])):          
+        for index, (result, result_desc) in enumerate(zip(results, [q[1] for q in questions])):
             if index == 1:
                 # render channel with its id
                 result = f'<#{result}>'
@@ -263,14 +202,14 @@ class main(commands.Cog):
                 # render seconds as days
                 result = str(timedelta(seconds = int(result))).split(',')[0]
 
-            # add to result list (replace methods used for yes/no questions)    
+            # add to result list (replace methods used for yes/no questions)
             setup_info += f"{result_desc.capitalize()}: **{result}**\n".replace('True', 'Yes').replace('False', 'No')
 
         setup_info += f"**Created <@&{q_role.id}>, <#{waitroom.id}>, and <#{history.id}>** (do not delete these!)"
 
         embed.description = setup_info
-        
+
         await main_msg.edit(embed = embed, view = None)
 
-def setup(bot):
-    bot.add_cog(main(bot))
+async def setup(bot: commands.Bot):
+    await bot.add_cog(Main(bot))

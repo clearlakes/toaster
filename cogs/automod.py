@@ -1,36 +1,14 @@
 import discord
-from discord.ext import commands, pages
+from discord.ext import commands
 
-from utils.views import DropdownView, EmojiView, QueueView
+from utils.base import BaseCog, BaseEmbed
+
+from utils.views import DropdownView, EmojiView, Paginator
 from utils.converters import ValidAction, ValidMethod
-from cogs.events import events
+from cogs.events import Events
 from utils import database
 
 from typing import Optional
-
-async def queue_paginator(client: commands.Bot, queue: list):
-    """Generates the quarantine queue."""
-    # fetch users using each id in the queue
-    user_list = [await client.fetch_user(user_id) for user_id in queue]
-    
-    # split list every 10 users (separate pages)
-    ul_sep = [user_list[i:i + 10] for i in range(0, len(user_list), 10)]
-
-    embeds = []
-
-    # create page embeds using lists
-    for index, list in enumerate(ul_sep):
-        embed = discord.Embed(
-            title = f"Queue ({len(user_list)} total)",
-            color = 0x2f3136
-        )
-
-        # render user and their place in queue
-        embed.description = '\n'.join([f'`{i + 1}.` {user}' for i, user in enumerate(list)])
-        embed.set_footer(text = f"page {index + 1} out of {len(ul_sep)}")
-        embeds.append(embed)
-    
-    return pages.Paginator(embeds, show_disabled = False, show_indicator = False)
 
 async def e_or_s_list(ctx, msg, kind, cache = None):
     """Generates the emoji/sticker cache."""
@@ -38,13 +16,13 @@ async def e_or_s_list(ctx, msg, kind, cache = None):
         # get cache list from database
         db = database.Guild(ctx.guild)
         guild = await db.get()
-        
+
         cache = guild.emoji_cache if kind == 'emoji' else guild.sticker_cache
-    
+
     # use "add one" / "add all" buttons in message
     view = EmojiView(msg, ctx, cache, kind)
 
-    embed = discord.Embed(color = 0x2f3136)
+    embed = BaseEmbed()
 
     if not cache:
         embed.description = f"No {kind}s are in the cache at the moment."
@@ -63,10 +41,7 @@ async def e_or_s_list(ctx, msg, kind, cache = None):
 
     return embed, view
 
-class automod(commands.Cog):
-    def __init__(self, client):
-        self.client = client
-
+class Automod(BaseCog):
     async def cog_check(self, ctx):
         exists = await database.Guild(ctx.guild).exists()
 
@@ -85,13 +60,12 @@ class automod(commands.Cog):
     async def toggle(self, ctx: commands.Context, method: Optional[ValidMethod]):
         user_choice = None
 
-        embed = discord.Embed()
+        embed = BaseEmbed()
         embed.set_author(name = ctx.message.author.name, icon_url = ctx.message.author.display_avatar)
 
         # let the user choose via dropdown if a method isn't given
         if not method:
             embed.description = "Select the method to use for dealing with new accounts using the dropdown menu below."
-            embed.color = self.client.gray
 
             view = DropdownView("method", ctx)
             user_choice = await ctx.send(embed = embed, view = view)
@@ -101,7 +75,7 @@ class automod(commands.Cog):
             method = view.value
 
         await database.Guild(ctx.guild).set_field('method', method.lower())
-        
+
         embed.description = f"Set the method to **{method.capitalize()}**."
         embed.color = discord.Color.brand_green()
 
@@ -110,7 +84,7 @@ class automod(commands.Cog):
             await user_choice.edit(embed = embed, view = None)
         else:
             await ctx.send(embed = embed)
-    
+
     @commands.command(aliases = ["q"])
     @commands.has_permissions(manage_roles = True, kick_members = True, ban_members = True)
     @commands.bot_has_permissions(manage_roles = True, kick_members = True, ban_members = True)
@@ -118,13 +92,12 @@ class automod(commands.Cog):
         db = database.Guild(ctx.guild)
         guild = await db.get()
 
-        # get quarantine role and users to manage 
+        # get quarantine role and users to manage
         # (will be everyone with the quarantine role if no members are given)
         q_role = ctx.message.guild.get_role(guild.q_role_id)
-        quarantine = members if members else q_role.members
+        quarantine = members if members else q_role.members if q_role else None
 
-        embed = discord.Embed()
-        embed.color = self.client.gray
+        embed = BaseEmbed()
 
         if not quarantine:
             embed.description = "Nobody's in quarantine right now."
@@ -140,14 +113,10 @@ class automod(commands.Cog):
             embed.add_field(name = "Latest user:", value = f"{latest_user}")
             embed.add_field(name = "Commands", value = "`t!q clear` - removes the quarantine role\n`t!q kick|ban` - kicks/bans users from the server\n`t!q add` - adds users to quarantines", inline = False)
             embed.set_thumbnail(url = latest_user.display_avatar)
-
             embed.set_footer(text = "(commands will apply to everyone in quarantine if nobody is specified)")
 
-            # add a 'queue' button if there are people in it
-            view = QueueView(guild) if guild.queue else None
+            return await ctx.send(embed = embed)
 
-            return await ctx.send(embed = embed, view = view)
-        
         # all of the for statements are separated in case it helps performance, not too sure though
 
         if action == "clear":
@@ -155,13 +124,13 @@ class automod(commands.Cog):
                 await member.remove_roles(q_role)
 
             action_taken = "Cleared"
-        
+
         elif action == "kick":
             for member in quarantine:
                 await member.kick()
 
             action_taken = "Kicked"
-        
+
         elif action == "ban":
             for member in quarantine:
                 await member.ban()
@@ -170,21 +139,21 @@ class automod(commands.Cog):
 
         elif not action or action == "add":
             log = await self.client.fetch_channel(guild.log_id)
-            
+
             for member in quarantine:
                 if str(member.id) in guild.quarantine or member.id in guild.queue:
                     if len(quarantine) == 1:
                         # send an error if the one member that was listed is being quarantined already
                         return await ctx.send("**Error:** that user is already quarantined!")
-                    
+
                     # continue in case there are others listed that have not been quarantined yet
                     continue
-                
-                position = await events(self.client).quarantine(member)
+
+                position = await Events(self.client).quarantine(member)
 
                 # log the quarantine
-                log_embed = events(self.client).create_log_embed(
-                    title = "Quarantined Member", 
+                log_embed = Events(self.client).create_log_embed(
+                    title = "Quarantined Member",
                     member = member,
                     reason = f"Manually added by {ctx.message.author.mention}",
                     extra = position
@@ -200,11 +169,11 @@ class automod(commands.Cog):
                 return await ctx.send(embed = embed)
 
             # get a list members in the queue
-            paginator = await queue_paginator(self.client, guild.queue)
-            return await paginator.send(ctx)
+            view = Paginator("Quarantine Queue", guild.queue, generate = True)
+            return await ctx.send(embed = view.pages[0], view = view)
 
         embed.description = f"**{action_taken} {len(quarantine)} member(s):**"
-        
+
         # send confirmation embed differently depending on how many members were managed
         if len(quarantine) > 20:
             embed.description = f"**{action_taken} {len(quarantine)} member(s):**"
@@ -214,7 +183,7 @@ class automod(commands.Cog):
             embed.description = f"**{action_taken} {quarantine[0].mention}.**"
 
         embed.color = discord.Color.brand_green()
-        
+
         await ctx.send(embed = embed)
 
     @commands.command(aliases = ["p"])
@@ -226,7 +195,7 @@ class automod(commands.Cog):
         added = []
         removed = []
 
-        embed = discord.Embed(color = self.client.gray)
+        embed = BaseEmbed()
 
         if not channels:
             # list all prioritized channels if no channels are given
@@ -248,7 +217,7 @@ class automod(commands.Cog):
 
             if added:
                 embed.add_field(name = 'Added:', value = ', '.join([f'<#{c}>' for c in added]))
-            
+
             if removed:
                 embed.add_field(name = 'Removed:', value = ', '.join([f'<#{c}>' for c in removed]))
 
@@ -263,7 +232,7 @@ class automod(commands.Cog):
         added = []
         removed = []
 
-        embed = discord.Embed(color = self.client.gray)
+        embed = BaseEmbed()
 
         if not roles:
             # list allowed roles
@@ -285,7 +254,7 @@ class automod(commands.Cog):
 
             if added:
                 embed.add_field(name = 'Added:', value = ', '.join([f'<@&{r}>' for r in added]))
-            
+
             if removed:
                 embed.add_field(name = 'Removed:', value = ', '.join([f'<@&{r}>' for r in removed]))
 
@@ -296,10 +265,7 @@ class automod(commands.Cog):
     @commands.bot_has_permissions(manage_emojis = True)
     async def emoji(self, ctx: commands.Context):
         # it might take some time to load emojis
-        loading = discord.Embed(
-            description = "Loading...",
-            color = self.client.gray
-        )
+        loading = BaseEmbed(description = "Loading...")
 
         # gets an embed containing the cache (and a view, if the cache is not empty)
         msg = await ctx.send(embed = loading)
@@ -311,10 +277,7 @@ class automod(commands.Cog):
     @commands.bot_has_permissions(manage_emojis_and_stickers = True)
     async def sticker(self, ctx: commands.Context):
         # same as emoji but for stickers
-        loading = discord.Embed(
-            description = "Loading...",
-            color = self.client.gray
-        )
+        loading = BaseEmbed(description = "Loading...")
 
         msg = await ctx.send(embed = loading)
         embed, view = await e_or_s_list(ctx, msg, 'sticker')
@@ -326,7 +289,7 @@ class automod(commands.Cog):
         db = database.Guild(ctx.guild)
         guild = await db.get()
 
-        embed = discord.Embed(color = self.client.gray)
+        embed = BaseEmbed()
 
         # toggle lockdown
         new_status = not guild.lockdown
@@ -337,5 +300,5 @@ class automod(commands.Cog):
 
         await ctx.send(embed = embed)
 
-def setup(bot):
-    bot.add_cog(automod(bot))
+async def setup(bot: commands.Bot):
+    await bot.add_cog(Automod(bot))
