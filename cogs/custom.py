@@ -80,17 +80,14 @@ class Custom(BaseCog):
         if not guild.vc_make_id or not guild.vc_wait_id:
             return
 
-        if after.channel:
-            if after.channel.id == guild.vc_make_id:
-                creation_vc = member.guild.get_channel(guild.vc_make_id)
-                vc = await member.guild.create_voice_channel(name = f"{member.name}'s vc", category = creation_vc.category, user_limit = 1)
-                await member.move_to(vc)
+        if after.channel and after.channel.id == guild.vc_make_id:
+            creation_vc = member.guild.get_channel(guild.vc_make_id)
+            vc = await member.guild.create_voice_channel(name = f"{member.name}'s vc", category = creation_vc.category, user_limit = 1)
+            await member.move_to(vc)
 
-                await db.set_field(f"user_vcs.{vc.id}.user_id", member.id)
-                await db.set_field(f"user_vcs.{vc.id}.successor_id", None)
-                return
-            else:
-                return
+            await db.set_field(f"user_vcs.{vc.id}.user_id", member.id)
+            await db.set_field(f"user_vcs.{vc.id}.successor_id", None)
+            return
 
         if ((before.channel and not after.channel) or (before.channel.id != after.channel.id)) and str(before.channel.id) in guild.user_vcs:
             vc_info = guild.user_vcs[str(before.channel.id)]
