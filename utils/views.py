@@ -175,24 +175,21 @@ class SelectEmojiView(discord.ui.View):
         await refresh(self.orig_view, self.kind, self.list, [emoji], self.msg, self.ctx)
 
 class ConfirmView(discord.ui.View):
-    def __init__(self, ctx):
+    def __init__(self, user: discord.Member):
         super().__init__()
         self.value = None
-        self.ctx = ctx
+        self.user_id = user.id
+
+    async def interaction_check(self, interaction: discord.Interaction):
+        return self.user_id == interaction.user.id
 
     @discord.ui.button(label = "yes", style = discord.ButtonStyle.primary)
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user != self.ctx.author:
-            return
-
         self.value = True   # chose yes
         self.stop()
 
-    @discord.ui.button(label = "i don't care", style = discord.ButtonStyle.secondary)
+    @discord.ui.button(label = "no i don't care", style = discord.ButtonStyle.secondary)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
-        if interaction.user != self.ctx.author:
-            return
-
         self.value = False  # chose no
         self.stop()
 

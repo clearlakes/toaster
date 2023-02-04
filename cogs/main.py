@@ -86,7 +86,7 @@ class Main(BaseCog):
         embed.set_author(name = "Pre-Setup")
         embed.description = "After asking a bunch of questions, the bot will create:\n- a quarantine role\n- a log channel (if you don't have one yet)\n- a waiting room (for users in the queue)\n- a history channel (for looking at past quarantines)\n\nPress **ok** when you're ready!"
 
-        view = ConfirmView(ctx)
+        view = ConfirmView(ctx.author)
         view.children[0].label = "ok"
         view.children[0].style = discord.ButtonStyle.gray
         view.remove_item(view.children[1])  # remove "idc" since it's not necessary
@@ -134,7 +134,7 @@ class Main(BaseCog):
 
             # switch to confirm view for yes/no questions
             elif index >= 3:
-                view = ConfirmView(ctx)
+                view = ConfirmView(ctx.author)
 
             # edit the main message with the new question
             await main_msg.edit(embed = embed, view = view)
