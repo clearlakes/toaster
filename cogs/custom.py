@@ -92,7 +92,7 @@ class Custom(BaseCog):
             else:
                 return
 
-        if before.channel and not after.channel and str(before.channel.id) in guild.user_vcs:
+        if ((before.channel and not after.channel) or (before.channel.id != after.channel.id)) and str(before.channel.id) in guild.user_vcs:
             vc_info = guild.user_vcs[str(before.channel.id)]
 
             if member.id == vc_info["user_id"]:
