@@ -2,8 +2,9 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 
-from utils.views import Paginator, ConfirmView
+
 from utils.base import BaseCog, BaseEmbed
+from utils.views import Paginator
 from utils import database
 
 from datetime import datetime, timedelta
@@ -58,148 +59,14 @@ class Custom(BaseCog):
             for t in list(guild.strike_topics.keys()) if current.lower() in t.lower()
         ]
 
-    async def vc_generator(self, interaction: discord.Interaction, current: str) -> list[str]:
-        db = database.Guild(interaction.guild)
-        guild = await db.get()
-
-        if not guild.user_vcs:
-            return []
-
-        vcs = [interaction.guild.get_channel(int(vc)) for vc in guild.user_vcs]
-
-        return [
-            app_commands.Choice(name = v.name, value = str(v.id))
-            for v in vcs if v and current.lower() in v.name.lower()
-        ]
-
     @commands.Cog.listener()
-    async def on_voice_state_update(self, member: discord.Member, before: discord.VoiceState, after: discord.VoiceState):
-        db = database.Guild(member.guild)
-        guild = await db.get()
-
-        if not guild.vc_make_id or not guild.vc_wait_id:
-            return
-
-        if after.channel and after.channel.id == guild.vc_make_id:
-            creation_vc = member.guild.get_channel(guild.vc_make_id)
-            vc = await member.guild.create_voice_channel(name = f"{member.name}'s vc", category = creation_vc.category, user_limit = 1)
-            await member.move_to(vc)
-
-            await db.set_field(f"user_vcs.{vc.id}.user_id", member.id)
-            await db.set_field(f"user_vcs.{vc.id}.successor_id", None)
-            return
-
-        if ((before.channel and not after.channel) or (before.channel.id != after.channel.id)) and str(before.channel.id) in guild.user_vcs:
-            vc_info = guild.user_vcs[str(before.channel.id)]
-
-            if member.id == vc_info["user_id"]:
-                if len(before.channel.members) > 0:
-                    if (successor := vc_info["successor_id"]) and any(m.id == successor for m in before.channel.members):
-                        new_user_id = successor
-                    else:
-                        new_user_id = before.channel.members[0].id
-
-                    await db.set_field(f"user_vcs.{before.channel.id}.user_id", new_user_id)
-                    await db.set_field(f"user_vcs.{before.channel.id}.successor_id", None)
-
-                    new_user = member.guild.get_member(new_user_id)
-                    await before.channel.edit(name = f"{new_user.name}'s vc")
-                else:
-                    await before.channel.delete()
-                    await db.del_field(f"user_vcs.{before.channel.id}")
-
-    @app_commands.command(description = "Ask to join someone's vc")
-    @app_commands.autocomplete(vc = vc_generator)
-    @app_commands.checks.cooldown(1, 10, key = lambda i: (i.guild_id, i.user.id))
-    @app_commands.guilds(slash_guild)
-    async def join(self, interaction: discord.Interaction, vc: str):
-        guild = await database.Guild(interaction.guild).get()
-
-        if not (user_voice := interaction.user.voice) or user_voice.channel.id != guild.vc_wait_id:
-            return await interaction.response.send_message(f"**Error:** you need to be waiting in <#{guild.vc_wait_id}>", ephemeral = True)
-
-        if not guild.user_vcs or vc not in guild.user_vcs:
-            return await interaction.response.send_message(f"**Error:** they do not have their own vc", ephemeral = True)
-
-        vc_info = guild.user_vcs[vc]
-        vc_owner = interaction.guild.get_member(vc_info["user_id"])
-
-        waiting_msg = f"waiting for {vc_owner.mention} to accept.."
-        await interaction.response.send_message(f"{waiting_msg} (stay in <#{guild.vc_wait_id}> so that you can be moved)", ephemeral = True)
-
-        view = ConfirmView(vc_owner)
-        dm_msg = await vc_owner.send(f"let {interaction.user} join your vc?", view = view)
-        await view.wait()
-
-        if view.value:
-            await dm_msg.edit(content = f"**accepted {interaction.user}'s request**", view = None)
-            await interaction.edit_original_response(content = f"{waiting_msg} **accepted!**")
-            await interaction.user.move_to(interaction.guild.get_channel(int(vc)))
-        else:
-            await dm_msg.edit(content = f"**declined {interaction.user}'s request**", view = None)
-            await interaction.edit_original_response(content = f"{waiting_msg} **declined**")
-
-    @join.error
-    async def _join_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        if isinstance(error, app_commands.CommandOnCooldown):
-            await interaction.response.send_message(f"**Error:** cooldown (wait {round(error.retry_after)}s)", ephemeral = True)
-        else:
-            raise error
-
-    @app_commands.command(description = "Transfer ownership of your vc (when you leave)")
-    @app_commands.guilds(slash_guild)
-    async def successor(self, interaction: discord.Interaction, member: discord.Member):
-        db = database.Guild(interaction.guild)
-        guild = await db.get()
-
-        if not guild.user_vcs or not (vc := [v for v in guild.user_vcs if guild.user_vcs[v]["user_id"] == interaction.user.id]):
-            return await interaction.response.send_message(f"**Error:** you're not in a vc owned by you", ephemeral = True)
-
-        if member.id == interaction.user.id:
-            return await interaction.response.send_message(f"**Error:** you can't make yourself a successor", ephemeral = True)
-
-        vc = vc[0]
-        channel = member.guild.get_channel(int(vc))
-
-        if member not in channel.members:
-            return await interaction.response.send_message(f"**Error:** they aren't in your vc", ephemeral = True)
-
-        await db.set_field(f"user_vcs.{vc}.successor_id", member.id)
-        await interaction.response.send_message(f"made {member.mention} the successor to your vc", ephemeral = True)
-
-    @app_commands.command(description = "Transfer ownership of your vc (now)")
-    @app_commands.guilds(slash_guild)
-    async def transfer(self, interaction: discord.Interaction, member: discord.Member):
-        db = database.Guild(interaction.guild)
-        guild = await db.get()
-
-        if not guild.user_vcs or not (vc := [v for v in guild.user_vcs if guild.user_vcs[v]["user_id"] == interaction.user.id]):
-            return await interaction.response.send_message(f"**Error:** you're not in a vc owned by you", ephemeral = True)
-
-        if member.id == interaction.user.id:
-            return await interaction.response.send_message(f"**Error:** you can't transfer a vc to yourself", ephemeral = True)
-
-        vc = vc[0]
-        channel = member.guild.get_channel(int(vc))
-
-        if member not in channel.members:
-            return await interaction.response.send_message(f"**Error:** they aren't in your vc", ephemeral = True)
-
-        await db.set_field(f"user_vcs.{vc}.user_id", member.id)
-        await db.set_field(f"user_vcs.{vc}.successor_id", interaction.user.id)
-
-        await channel.edit(name = f"{member.name}'s vc")
-        await interaction.response.send_message(f"made {member.mention} the new vc owner", ephemeral = True)
-
-    @app_commands.command(description = "Sets up user vc rooms")
-    @app_commands.checks.has_permissions(administrator = True)
-    @app_commands.guilds(slash_guild)
-    async def vcsetup(self, interaction: discord.Interaction, creation_vc: discord.VoiceChannel, waiting_vc: discord.VoiceChannel):
-        db = database.Guild(interaction.guild)
-        await db.set_field(f"vc_make_id", creation_vc.id)
-        await db.set_field(f"vc_wait_id", waiting_vc.id)
-
-        await interaction.response.send_message("ok")
+    async def on_message(self, message: discord.Message):
+        if (
+            message.content == ";kevin" and
+            message.guild.id == slash_guild.id and
+            message.author.id != self.client.user.id
+        ):
+            await message.add_reaction("😃")
 
     @commands.command()
     @commands.is_owner()
@@ -312,7 +179,6 @@ class Custom(BaseCog):
     @app_commands.describe(member = "choose a member to un-strike", topic = "choose a strike topic")
     @app_commands.autocomplete(topic = topic_generator)
     @app_commands.default_permissions(kick_members = True, ban_members = True)
-    @app_commands.guilds(slash_guild)
     async def unstrike(self, interaction: discord.Interaction, member: discord.Member, topic: str):
         db = database.Guild(interaction.guild)
         guild = await db.get()
@@ -346,7 +212,6 @@ class Custom(BaseCog):
     @app_commands.describe(member = "choose a member to strike", topic = "choose a strike topic")
     @app_commands.autocomplete(topic = topic_generator)
     @app_commands.default_permissions(kick_members = True, ban_members = True)
-    @app_commands.guilds(slash_guild)
     async def strike(self, interaction: discord.Interaction, member: discord.Member, topic: str):
         db = database.Guild(interaction.guild)
         guild = await db.get()

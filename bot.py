@@ -26,7 +26,7 @@ class Toaster(commands.Bot):
     async def setup_hook(self):
         self.session = aiohttp.ClientSession(loop = self.loop)
 
-        for cog in ["automod", "custom", "events", "main"]:
+        for cog in ["automod", "custom", "events", "main", "vc"]:
             await self.load_extension(f"cogs.{cog}")
 
     async def on_ready(self):

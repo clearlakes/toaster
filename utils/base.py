@@ -24,5 +24,10 @@ class BaseEmbed(discord.Embed):
         )
 
 class BaseCog(commands.Cog):
-    def __init__(self, client):
-        self.client: Toaster = client
+    def __init__(self, client: Toaster):
+        self.client = client
+
+class BaseGroupCog(commands.GroupCog):
+    def __init__(self, client: Toaster):
+        self.client = client
+        super().__init__()

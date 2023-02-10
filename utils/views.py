@@ -175,23 +175,22 @@ class SelectEmojiView(discord.ui.View):
         await refresh(self.orig_view, self.kind, self.list, [emoji], self.msg, self.ctx)
 
 class ConfirmView(discord.ui.View):
-    def __init__(self, user: discord.Member):
+    def __init__(self, user: discord.Member, options: dict = {"yes": True, "no i don't care": False}):
         super().__init__()
         self.value = None
         self.user_id = user.id
 
+        async def callback(interaction: discord.Interaction):
+            self.value = options[interaction.data["custom_id"].split(":")[-1]]
+            self.stop()
+
+        for label in options.keys():
+            btn = discord.ui.Button(label = label, custom_id = f"cv:{label}")
+            btn.callback = callback
+            self.add_item(btn)
+
     async def interaction_check(self, interaction: discord.Interaction):
         return self.user_id == interaction.user.id
-
-    @discord.ui.button(label = "yes", style = discord.ButtonStyle.primary)
-    async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.value = True   # chose yes
-        self.stop()
-
-    @discord.ui.button(label = "no i don't care", style = discord.ButtonStyle.secondary)
-    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
-        self.value = False  # chose no
-        self.stop()
 
 class DropdownView(discord.ui.View):
     def __init__(self, kind, ctx: commands.Context):
