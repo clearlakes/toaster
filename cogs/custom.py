@@ -59,6 +59,22 @@ class Custom(BaseCog):
             for t in list(guild.strike_topics.keys()) if current.lower() in t.lower()
         ]
 
+    async def remove_booster_roles(self, member: discord.Member):
+        booster_roles = [await member.guild.get_role(role_id) for role_id in [
+                924460642319073310,
+                924464072362164274,
+                924461337478856876,
+                924463602902110240,
+                924462136313389056,
+                924461859405455461,
+                924460873769156668,
+                920754099429986334,
+                924462520859770910,
+                924463093780738078
+        ]]
+
+        await member.remove_roles(*booster_roles)
+
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         if (
@@ -68,11 +84,31 @@ class Custom(BaseCog):
         ):
             await message.add_reaction("😃")
 
+    @commands.Cog.listener()
+    async def on_member_update(self, before: discord.Member, after: discord.Member):
+        if (
+            after.guild.id == slash_guild.id and
+            before.premium_since is not None and
+            after.premium_since is None  # boost ended
+        ):
+            await self.remove_booster_roles(after)
+
     @commands.command()
     @commands.is_owner()
     async def sync(self, ctx: commands.Context):
         await self.client.tree.sync(guild = slash_guild)  # updates slash commands
         await ctx.send("ok")
+
+    @commands.command()
+    @commands.has_permissions(administrator = True)
+    async def rolesync(self, ctx: commands.Context):
+        msg = await ctx.send("going through members.....")
+
+        for member in ctx.guild.members:
+            if member.premium_since is None:
+                await self.remove_booster_roles(member)
+
+        await msg.edit(content = "ok")
 
     @commands.command(aliases = ["w"])
     @commands.has_permissions(administrator = True)
