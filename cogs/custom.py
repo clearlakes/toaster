@@ -60,7 +60,7 @@ class Custom(BaseCog):
         ]
 
     async def remove_booster_roles(self, member: discord.Member):
-        booster_roles = [await member.guild.get_role(role_id) for role_id in [
+        booster_roles = [member.guild.get_role(role_id) for role_id in [
                 924460642319073310,
                 924464072362164274,
                 924461337478856876,
